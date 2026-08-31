@@ -12,28 +12,55 @@ MEO 是一套自托管的服务器、Xray 节点、套餐、用户、订阅与�
 | Compose + PostgreSQL | 长期运行、多用户 | PostgreSQL 17 | 数据库独立持久化 |
 | systemd 一键安装 | 需要直接管理宿主机 Nginx/Xray | SQLite 或外部 PostgreSQL | 支持 amd64/arm64 |
 
-## Docker Compose：快速启动
+## Docker Compose
 
-需要 Docker Engine 24+、Docker Compose v2、Git 和 OpenSSL。私有仓库需要先在服务器上配置 GitHub 访问权限。
-
-下面整段可以直接复制执行。它会克隆仓库、创建 `.env`、自动生成并写入随机会话密钥，然后构建并启动面板：
+镜像保存在私有 GHCR。服务器首次部署前，使用具备 `read:packages` 权限的 GitHub Token 登录一次：
 
 ```bash
-set -e
-git clone https://github.com/aoomee/MEO.git meo
-cd meo
-umask 077
-cp .env.example .env
-meo_jwt_secret="$(openssl rand -hex 32)"
-sed -i "s|^MMWX_JWT_SECRET=.*|MMWX_JWT_SECRET=${meo_jwt_secret}|" .env
-docker compose up -d --build
+docker login ghcr.io -u aoomee
+```
+
+复制下面完整内容并保存为 `docker-compose.yml`，也可以直接粘贴到 1Panel 的 Compose 编辑器：
+
+```yaml
+name: meo
+
+services:
+  panel:
+    image: ghcr.io/aoomee/meo:latest
+    container_name: meo
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      - "12889:12889"
+    environment:
+      PORT: "12889"
+      BIND_HOST: "0.0.0.0"
+      TZ: "Asia/Shanghai"
+      MMWX_DATA_DIR: "/app/data"
+      MMWX_DATABASE_DRIVER: "sqlite"
+      MMWX_DATABASE_PATH: "/app/data/mmwx.db"
+      MMWX_UPDATE_REPO: "off"
+      MMWX_AGENT_GITHUB_REPO: "off"
+    volumes:
+      - mmwx-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mmwx-data:
+```
+
+在该文件所在目录执行：
+
+```bash
+docker compose up -d
 docker compose ps
 ```
 
-需要查看实时日志时单独执行：
+查看实时日志：
 
 ```bash
-cd meo
 docker compose logs -f panel
 ```
 
@@ -58,7 +85,7 @@ POSTGRES_PASSWORD=CHANGE_ME_TO_A_STRONG_RANDOM_PASSWORD
 docker compose \
   -f docker-compose.yml \
   -f deploy/compose.postgres.yml \
-  up -d --build
+  up -d
 ```
 
 PostgreSQL 数据保存在 `postgres-data` volume。不要直接把已有 SQLite 实例切换成 PostgreSQL；请先通过面板完成数据备份或迁移。
@@ -153,7 +180,7 @@ SQLite Compose 备份：
 ```bash
 docker compose stop panel
 docker run --rm \
-  -v mmwx_mmwx-data:/source \
+  -v meo_mmwx-data:/source \
   -v "$PWD/backup:/backup" \
   alpine tar -czf /backup/mmwx-data.tar.gz -C /source .
 docker compose start panel
@@ -162,7 +189,7 @@ docker compose start panel
 升级前先备份数据，再执行：
 
 ```bash
-docker compose build --pull
+docker compose pull
 docker compose up -d
 ```
 
@@ -179,7 +206,7 @@ docker compose up -d
 ## 发布前安全检查
 
 - 不要提交 `.env`、数据库、日志、`machine-id`、Token、私钥或运行时配置。
-- 生产环境必须使用随机 `JWT_SECRET`，并通过 HTTPS 访问。
+- 会话令牌由服务端使用加密安全随机数生成；生产环境必须通过 HTTPS 访问。
 - 在线更新默认关闭；启用私有仓库更新时，请使用最小权限 Token。
 - 升级前备份 SQLite/PostgreSQL 数据和 Agent 配置。
 

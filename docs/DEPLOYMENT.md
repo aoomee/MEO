@@ -12,21 +12,26 @@ Agent 建议安装在受管服务器宿主机上，不建议放入容器，因�
 
 ## Docker Compose（SQLite）
 
+先使用具备 `read:packages` 权限的 GitHub Token 登录私有 GHCR：
+
 ```bash
-cp .env.example .env
-openssl rand -hex 32
-# 将输出写入 .env 的 MMWX_JWT_SECRET
-docker compose up -d --build
+docker login ghcr.io -u aoomee
+```
+
+复制根目录 README 中的完整 Compose YAML，保存为 `docker-compose.yml` 后启动：
+
+```bash
+docker compose up -d
 docker compose logs -f panel
 ```
 
-默认端口是 `12889`，数据保存在 Docker volume `mmwx-data`。修改 `.env` 的 `MMWX_PORT` 可以改变宿主机端口。
+默认端口是 `12889`，数据保存在 Docker volume `mmwx-data`。修改 Compose 的端口映射可以改变宿主机端口。
 
 备份：
 
 ```bash
 docker compose stop panel
-docker run --rm -v mmwx_mmwx-data:/source -v "$PWD/backup:/backup" alpine \
+docker run --rm -v meo_mmwx-data:/source -v "$PWD/backup:/backup" alpine \
   tar -czf /backup/mmwx-data.tar.gz -C /source .
 docker compose start panel
 ```
@@ -36,7 +41,7 @@ docker compose start panel
 先在 `.env` 设置强密码 `POSTGRES_PASSWORD`，再运行：
 
 ```bash
-docker compose -f docker-compose.yml -f deploy/compose.postgres.yml up -d --build
+docker compose -f docker-compose.yml -f deploy/compose.postgres.yml up -d
 ```
 
 PostgreSQL 数据位于 `postgres-data` volume。不要在已运行的 SQLite 实例上直接切换变量；应先通过面板备份/迁移功能完成数据库迁移。
@@ -123,7 +128,7 @@ agent-bin/mmwx-agent-linux-arm64
 
 ## 升级与回滚
 
-- Compose：先备份 volume，再执行 `docker compose build --pull && docker compose up -d`。
+- Compose：先备份 volume，再执行 `docker compose pull && docker compose up -d`。
 - systemd：`deploy/install.sh update` 在启动失败时会恢复旧二进制。
 - 数据库：升级前通过面板备份，或停服务后复制 SQLite 数据目录。
 

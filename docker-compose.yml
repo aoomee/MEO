@@ -1,11 +1,10 @@
-name: mmwx
+name: meo
 
 services:
   panel:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: mmwx-panel:local
+    image: ghcr.io/aoomee/meo:latest
+    container_name: meo
+    pull_policy: always
     restart: unless-stopped
     ports:
       - "${MMWX_PORT:-12889}:12889"
@@ -13,7 +12,6 @@ services:
       PORT: 12889
       BIND_HOST: 0.0.0.0
       TZ: ${MMWX_TZ:-Asia/Shanghai}
-      JWT_SECRET: ${MMWX_JWT_SECRET:?set MMWX_JWT_SECRET in .env}
       MMWX_DATA_DIR: /app/data
       MMWX_DATABASE_DRIVER: sqlite
       MMWX_DATABASE_PATH: /app/data/mmwx.db
