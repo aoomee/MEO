@@ -18,6 +18,10 @@ jobs:
         arch: [amd64, arm64]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check embedded frontend
+        run: ./scripts/check-web-dist.sh
+
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26.x"
