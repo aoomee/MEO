@@ -3,6 +3,7 @@ package handler
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -38,8 +39,9 @@ func NewChildManageHandler(configToken string) *ChildManageHandler {
 // 验证检查请求是否被授权
 func (h *ChildManageHandler) authenticate(r *http.Request) bool {
 	if h.configToken == "" {
-		// 如果未配置令牌，则允许所有请求（不建议用于生产）
-		return true
+		// 安全基线：未配置令牌时拒绝所有请求。
+		// 此前为放行（兼容旧行为），但这会让 /api/child/* 在漏配 token 时完全裸奔。
+		return false
 	}
 
 	// 检查授权标头
@@ -52,13 +54,13 @@ func (h *ChildManageHandler) authenticate(r *http.Request) bool {
 	}
 
 	// 支持“Bearer <token>”格式
+	token := auth
 	if strings.HasPrefix(auth, "Bearer ") {
-		token := strings.TrimPrefix(auth, "Bearer ")
-		return token == h.configToken
+		token = strings.TrimPrefix(auth, "Bearer ")
 	}
 
-	// 还支持普通令牌
-	return auth == h.configToken
+	// 恒定时间比较，避免计时侧信道
+	return subtle.ConstantTimeCompare([]byte(token), []byte(h.configToken)) == 1
 }
 
 // 写入 JSON 响应
