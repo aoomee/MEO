@@ -1,0 +1,1 @@
+import{j as _0x348a9d}from'./vendor-modules-0UUaSA6d.js';import{l as _0x2660e6}from'./index-0oY9qUmNNK.js';function r({className:_0x2393e6,..._0x113866}){return _0x348a9d['jsx']('div',{'data-slot':'skeleton','className':_0x2660e6('bg-accent\x20animate-pulse\x20rounded-md',_0x2393e6),..._0x113866});}export{r as S};

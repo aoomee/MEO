@@ -1,0 +1,27 @@
+[Unit]
+Description=MMWX self-hosted panel
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mmwx
+Group=mmwx
+WorkingDirectory=/var/lib/mmwx
+EnvironmentFile=-/etc/mmwx/mmwx.env
+Environment=MMWX_DATA_DIR=/var/lib/mmwx/data
+Environment=PORT=12889
+Environment=BIND_HOST=0.0.0.0
+ExecStart=/usr/local/bin/mmwx
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/mmwx
+LimitNOFILE=1048576
+
+[Install]
+WantedBy=multi-user.target

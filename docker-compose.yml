@@ -1,0 +1,29 @@
+name: mmwx
+
+services:
+  panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mmwx-panel:local
+    restart: unless-stopped
+    ports:
+      - "${MMWX_PORT:-12889}:12889"
+    environment:
+      PORT: 12889
+      BIND_HOST: 0.0.0.0
+      TZ: ${MMWX_TZ:-Asia/Shanghai}
+      JWT_SECRET: ${MMWX_JWT_SECRET:?set MMWX_JWT_SECRET in .env}
+      MMWX_DATA_DIR: /app/data
+      MMWX_DATABASE_DRIVER: sqlite
+      MMWX_DATABASE_PATH: /app/data/mmwx.db
+      MMWX_UPDATE_REPO: ${MMWX_UPDATE_REPO:-off}
+      MMWX_AGENT_GITHUB_REPO: ${MMWX_AGENT_GITHUB_REPO:-off}
+      MMWX_GH_TOKEN: ${MMWX_GH_TOKEN:-}
+    volumes:
+      - mmwx-data:/app/data
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  mmwx-data:

@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh">
+  <head>
+    <meta charset="UTF-8" />
+    <link id="mmwx-favicon" rel="icon" href="__MMW_SITE_ICON__" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Primary Meta Tags -->
+    <title>__MMW_SITE_TITLE__</title>
+    <script>
+      // Vite 开发服务器不会经过 Go 的首屏注入。标题保持为空，等公开品牌接口
+      // 返回后再显示自定义标题或默认名称，避免加载过程中先闪出内置品牌。
+      if (document.title.startsWith('__MMW_')) document.title = ''
+      var initialIcon = document.getElementById('mmwx-favicon')
+      if (initialIcon && initialIcon.href.indexOf('__MMW_') !== -1)
+        initialIcon.href = '/images/meo-mark.png'
+    </script>
+    <meta name="title" content="MEO" />
+    <meta name="description" content="服务器与订阅管理面板" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="" />
+    <meta property="og:title" content="MEO" />
+    <meta property="og:description" content="服务器与订阅管理面板" />
+    <meta property="og:image" content="/images/meo-mark.png" />
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="" />
+    <meta property="twitter:title" content="MEO" />
+    <meta property="twitter:description" content="服务器与订阅管理面板" />
+    <meta property="twitter:image" content="/images/meo-mark.png" />
+
+    <meta name="theme-color" content="#F5F7F6" />
+    <script type="module" crossorigin src="/assets/index-0oY9qUmNNK.js"></script>
+    <link rel="modulepreload" crossorigin href="/assets/vendor-modules-0UUaSA6d.js">
+    <link rel="stylesheet" crossorigin href="/assets/index-ByYEMnak.css">
+    <link rel="stylesheet" href="/assets/minimal.css">
+  </head>
+
+  <body>
+    <script>
+      ;(function () {
+        var root = document.documentElement
+        function lockMinimalTheme() {
+          Array.from(root.classList).forEach(function (name) {
+            if (name.indexOf('theme-') === 0 && name !== 'theme-flat' && name !== 'theme-minimal') {
+              root.classList.remove(name)
+            }
+          })
+          root.classList.add('theme-flat', 'theme-minimal')
+        }
+        document.cookie = 'mmw-theme-style=flat; Path=/; SameSite=Lax'
+        lockMinimalTheme()
+        new MutationObserver(function () {
+          if (
+            Array.from(root.classList).some(function (name) {
+              return name.indexOf('theme-') === 0 && name !== 'theme-flat' && name !== 'theme-minimal'
+            }) ||
+            !root.classList.contains('theme-flat') ||
+            !root.classList.contains('theme-minimal')
+          ) lockMinimalTheme()
+        }).observe(root, { attributes: true, attributeFilter: ['class'] })
+      })()
+    </script>
+    <div id="root"></div>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+services:
+  panel:
+    environment:
+      MMWX_DATABASE_DRIVER: postgres
+      MMWX_DATABASE_HOST: postgres
+      MMWX_DATABASE_PORT: 5432
+      MMWX_DATABASE_NAME: ${POSTGRES_DB:-mmwx}
+      MMWX_DATABASE_USER: ${POSTGRES_USER:-mmwx}
+      MMWX_DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      MMWX_DATABASE_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-mmwx}
+      POSTGRES_USER: ${POSTGRES_USER:-mmwx}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      TZ: ${MMWX_TZ:-Asia/Shanghai}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:

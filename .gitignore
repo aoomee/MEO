@@ -1,0 +1,39 @@
+.DS_Store
+.env
+mmw-agent/config.yaml
+*.log
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local runtime data and secrets
+data/
+**/data/
+**/machine-id
+**/token_invalid.yaml
+**/database.json
+**/mmwx_master.key
+**/agent-bin/
+miaomiaowux/screenshots/
+miaomiaowux/internal/tgbot/bot/assets/logo-light.png
+miaomiaowux/internal/tgbot/bot/assets/logo-dark.webp
+
+# Build and debug output
+/build/
+/dist/
+**/build/
+**/__debug_bin*
+mmwx
+mmwx-agent
+mmwx-*-amd64
+mmwx-*-arm64
+*.exe
+
+# Editors and local tooling
+.idea/
+.vscode/
+.claude/
+go.work
+go.work.sum

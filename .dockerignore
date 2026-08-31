@@ -1,0 +1,14 @@
+.git
+.github
+.env
+mmw-agent/config.yaml
+**/data
+**/build
+**/__debug_bin*
+*.db
+*.db-shm
+*.db-wal
+*.rar
+docs
+deploy
+scripts

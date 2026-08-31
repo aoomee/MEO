@@ -1,0 +1,1 @@
+import{j as _0xfdf299,a9 as _0x2427c7}from'./vendor-modules-0UUaSA6d.js';function r(){return _0xfdf299['jsx'](_0x2427c7,{});}export{r as component};

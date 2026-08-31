@@ -1,0 +1,1 @@
+import{j as _0x1822d0,a9 as _0x220244}from'./vendor-modules-0UUaSA6d.js';function a(){return _0x1822d0['jsx'](_0x220244,{});}export{a as component};

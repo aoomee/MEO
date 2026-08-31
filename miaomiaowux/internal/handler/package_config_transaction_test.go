@@ -1,0 +1,256 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"testing"
+	"time"
+
+	"miaomiaowux/internal/storage"
+)
+
+func managedConfigFixture() map[string]interface{} {
+	return map[string]interface{}{
+		"inbounds": []interface{}{map[string]interface{}{
+			"tag":      "parent-in",
+			"protocol": "vless",
+			"settings": map[string]interface{}{
+				"clients": []interface{}{map[string]interface{}{"email": "alice__parent-in", "id": "old-id"}},
+			},
+		}},
+		"routing": map[string]interface{}{
+			"rules": []interface{}{map[string]interface{}{
+				"marktag":     "route-one",
+				"outboundTag": "landing-one",
+				"user":        []interface{}{"alice__route-one"},
+			}},
+		},
+	}
+}
+
+func TestManagedClientUpsertReplacesSameEmail(t *testing.T) {
+	cfg := managedConfigFixture()
+	if err := upsertManagedClient(cfg, "parent-in", map[string]interface{}{"email": "alice__parent-in", "id": "new-id"}); err != nil {
+		t.Fatal(err)
+	}
+	_, settings, _, _ := managedInbound(cfg, "parent-in")
+	clients := settings["clients"].([]interface{})
+	if len(clients) != 1 {
+		t.Fatalf("clients=%d, want 1", len(clients))
+	}
+	if got := clients[0].(map[string]interface{})["id"]; got != "new-id" {
+		t.Fatalf("credential=%v, want new-id", got)
+	}
+	if err := validateManagedConfig(cfg); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestManagedAccountUpsertAndRemoveByUsername(t *testing.T) {
+	cfg := map[string]interface{}{
+		"inbounds": []interface{}{map[string]interface{}{
+			"tag": "socks-in", "protocol": "socks",
+			"settings": map[string]interface{}{"accounts": []interface{}{
+				map[string]interface{}{"user": "alice", "pass": "old"},
+			}},
+		}},
+	}
+	credential := map[string]interface{}{"user": "alice", "pass": "new"}
+	if err := upsertManagedClient(cfg, "socks-in", credential); err != nil {
+		t.Fatal(err)
+	}
+	_, settings, _, _ := managedInbound(cfg, "socks-in")
+	accounts := settings["accounts"].([]interface{})
+	if len(accounts) != 1 || accounts[0].(map[string]interface{})["pass"] != "new" {
+		t.Fatalf("accounts were not replaced: %#v", accounts)
+	}
+	if err := removeManagedClient(cfg, "socks-in", "", credential); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(settings["accounts"].([]interface{})); got != 0 {
+		t.Fatalf("accounts=%d, want 0", got)
+	}
+}
+
+func TestManagedParentClientAndRouteChangeTogether(t *testing.T) {
+	cfg := managedConfigFixture()
+	cred := map[string]interface{}{"email": "bob__route-one", "id": "bob-id"}
+	if err := upsertManagedClient(cfg, "parent-in", cred); err != nil {
+		t.Fatal(err)
+	}
+	if err := mutateManagedRouteUser(cfg, "route-one", "", "bob__route-one", true); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeManagedClient(cfg, "parent-in", "bob__route-one"); err != nil {
+		t.Fatal(err)
+	}
+	if err := mutateManagedRouteUser(cfg, "route-one", "", "bob__route-one", false); err != nil {
+		t.Fatal(err)
+	}
+	_, settings, _, _ := managedInbound(cfg, "parent-in")
+	for _, raw := range settings["clients"].([]interface{}) {
+		if raw.(map[string]interface{})["email"] == "bob__route-one" {
+			t.Fatal("routed client remained in parent inbound")
+		}
+	}
+	rules := cfg["routing"].(map[string]interface{})["rules"].([]interface{})
+	for _, raw := range rules[0].(map[string]interface{})["user"].([]interface{}) {
+		if raw == "bob__route-one" {
+			t.Fatal("routed email remained in routing rule")
+		}
+	}
+}
+
+func TestValidateManagedConfigRejectsDuplicateEmail(t *testing.T) {
+	cfg := managedConfigFixture()
+	_, settings, _, _ := managedInbound(cfg, "parent-in")
+	settings["clients"] = append(settings["clients"].([]interface{}), map[string]interface{}{"email": "alice__parent-in", "id": "other"})
+	err := validateManagedConfig(cfg)
+	if err == nil || !strings.Contains(err.Error(), "重复 Xray email") {
+		t.Fatalf("duplicate was not rejected: %v", err)
+	}
+}
+
+func TestPackageNodeDiff(t *testing.T) {
+	added, removed := packageNodeDiff([]int64{1, 2, 4}, []int64{2, 3, 4})
+	if len(added) != 1 || added[0] != 3 || len(removed) != 1 || removed[0] != 1 {
+		t.Fatalf("added=%v removed=%v", added, removed)
+	}
+}
+
+func TestPackageNodeSkipsInboundSyncForExternalNodes(t *testing.T) {
+	if !packageNodeSkipsInboundSync(storage.Node{NodeType: "physical"}) {
+		t.Fatal("external node without inbound_tag must not trigger managed Xray synchronization")
+	}
+	if !packageNodeSkipsInboundSync(storage.Node{NodeType: "physical", InboundTag: "  "}) {
+		t.Fatal("blank inbound_tag must be treated as absent")
+	}
+	if packageNodeSkipsInboundSync(storage.Node{NodeType: "physical", InboundTag: "vless-443"}) {
+		t.Fatal("managed physical node must be synchronized")
+	}
+	if packageNodeSkipsInboundSync(storage.Node{NodeType: "routed"}) {
+		t.Fatal("routed nodes use their dedicated synchronization path")
+	}
+	if !packageNodeSkipsInboundSync(storage.Node{NodeType: "physical", InboundTag: "wg-1", Protocol: "wireguard"}) {
+		t.Fatal("wireguard nodes skip clients[] sync and use wg_leases")
+	}
+}
+
+func TestPackageUpdateAllowsExternalNodeWithoutInboundTag(t *testing.T) {
+	repo, err := storage.NewTrafficRepository(filepath.Join(t.TempDir(), "external-package.db"))
+	if err != nil {
+		t.Fatalf("NewTrafficRepository: %v", err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	ctx := context.Background()
+
+	if err := repo.CreateUser(ctx, "external-user", "external@example.com", "external-user", "hash", "user", ""); err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	pkgID, err := repo.CreatePackage(ctx, storage.Package{
+		Name: "external-package", TrafficLimitGB: 100, TrafficLimitBytes: 100 << 30, CycleDays: 30,
+	})
+	if err != nil {
+		t.Fatalf("CreatePackage: %v", err)
+	}
+	now := time.Now()
+	if err := repo.AssignPackageToUser(ctx, "external-user", pkgID, now, now.AddDate(0, 1, 0), false, 0); err != nil {
+		t.Fatalf("AssignPackageToUser: %v", err)
+	}
+	node, err := repo.CreateNode(ctx, storage.Node{
+		Username: "admin", RawURL: "ss://external", NodeName: "External Node", Protocol: "ss", Enabled: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateNode: %v", err)
+	}
+
+	h := NewPackageUpdateHandler(repo, nil, nil)
+	body := `{"id":` + strconv.FormatInt(pkgID, 10) +
+		`,"name":"external-package","traffic_limit_gb":100,"cycle_days":30,"nodes":[` +
+		strconv.FormatInt(node.ID, 10) + `]}`
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodPut, "/api/admin/packages/update", strings.NewReader(body)))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("external node update returned %d: %s", rec.Code, rec.Body.String())
+	}
+	updated, err := repo.GetPackage(ctx, pkgID)
+	if err != nil {
+		t.Fatalf("GetPackage: %v", err)
+	}
+	if len(updated.Nodes) != 1 || updated.Nodes[0] != node.ID {
+		t.Fatalf("external node was not saved: %v", updated.Nodes)
+	}
+}
+
+func TestPrivateRouteMutationIsIdempotent(t *testing.T) {
+	cfg := managedConfigFixture()
+	detail := &storage.RoutedNodeDetail{
+		Node:              storage.Node{InboundTag: "parent-in"},
+		RoutedRuleMarktag: "private-route",
+		RoutedOutboundTag: "private-out",
+	}
+	if err := upsertPrivateRoute(cfg, detail, "alice-private"); err != nil {
+		t.Fatal(err)
+	}
+	if err := upsertPrivateRoute(cfg, detail, "alice-private"); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeManagedRoute(cfg, "private-route"); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeManagedRoute(cfg, "private-route"); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestEffectivePackageNodeIDsEmptyMeansAdminNodes(t *testing.T) {
+	repo, err := storage.NewTrafficRepository(filepath.Join(t.TempDir(), "package-all.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = repo.Close() })
+	ctx := context.Background()
+	if err := repo.CreateUser(ctx, "admin", "", "admin", "hash", storage.RoleAdmin, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.CreateUser(ctx, "alice", "", "alice", "hash", storage.RoleUser, ""); err != nil {
+		t.Fatal(err)
+	}
+	adminNode, err := repo.CreateNode(ctx, storage.Node{Username: "admin", NodeName: "shared", Protocol: "ss", ClashConfig: `{"name":"shared","type":"ss","server":"example.com","port":443}`, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	privateNode, err := repo.CreateNode(ctx, storage.Node{Username: "alice", NodeName: "private", Protocol: "ss", ClashConfig: `{"name":"private","type":"ss","server":"example.net","port":443}`, Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 从未配置过节点 → 保持"放行全部管理员节点"的产品语义
+	got, err := effectivePackageNodeIDs(ctx, repo, nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// 配置过但节点被删光 → 必须是零节点,绝不能退化成"全部"。
+	// 线上事故:客户删掉某套餐仅有的两个节点后,该套餐用户的订阅里出现了全部节点。
+	drained, drainErr := effectivePackageNodeIDs(ctx, repo, nil, true)
+	if drainErr != nil {
+		t.Fatal(drainErr)
+	}
+	if len(drained) != 0 {
+		t.Fatalf("节点被删光的套餐本应返回零节点,实际返回 %v —— 存在越权发放", drained)
+	}
+
+	if len(got) != 1 || got[0] != adminNode.ID {
+		t.Fatalf("effective nodes = %v, want only admin node %d (private=%d)", got, adminNode.ID, privateNode.ID)
+	}
+	explicit, err := effectivePackageNodeIDs(ctx, repo, []int64{privateNode.ID}, true)
+	if err != nil || len(explicit) != 1 || explicit[0] != privateNode.ID {
+		t.Fatalf("explicit selection changed: %v, err=%v", explicit, err)
+	}
+}

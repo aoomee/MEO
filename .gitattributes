@@ -1,0 +1,16 @@
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.zip binary
+*.gz binary
+*.dat binary
+
+# Imported/generated trees keep their upstream formatting.
+xray-core-vision-limiter/** -whitespace
+miaomiaowux/internal/web/dist/** -whitespace
