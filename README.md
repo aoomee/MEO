@@ -14,25 +14,26 @@ MEO 是一套自托管的服务器、Xray 节点、套餐、用户、订阅与�
 
 ## Docker Compose：快速启动
 
-需要 Docker Engine 24+ 和 Docker Compose v2。
+需要 Docker Engine 24+、Docker Compose v2、Git 和 OpenSSL。私有仓库需要先在服务器上配置 GitHub 访问权限。
+
+下面整段可以直接复制执行。它会克隆仓库、创建 `.env`、自动生成并写入随机会话密钥，然后构建并启动面板：
 
 ```bash
+set -e
 git clone https://github.com/aoomee/MEO.git meo
 cd meo
+umask 077
 cp .env.example .env
-```
-
-生成会话密钥，并把结果写入 `.env` 的 `MMWX_JWT_SECRET`：
-
-```bash
-openssl rand -hex 32
-```
-
-启动面板：
-
-```bash
+meo_jwt_secret="$(openssl rand -hex 32)"
+sed -i "s|^MMWX_JWT_SECRET=.*|MMWX_JWT_SECRET=${meo_jwt_secret}|" .env
 docker compose up -d --build
 docker compose ps
+```
+
+需要查看实时日志时单独执行：
+
+```bash
+cd meo
 docker compose logs -f panel
 ```
 
