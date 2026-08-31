@@ -1,9 +1,8 @@
 name: Publish container image
 
 on:
-  push:
-    branches:
-      - main
+  # Publishing is deliberately manual. Security fixes and documentation may
+  # be pushed without silently replacing the public production image.
   workflow_dispatch:
 
 permissions:

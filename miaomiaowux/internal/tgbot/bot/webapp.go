@@ -734,17 +734,14 @@ func webAllow(ip string) bool {
 }
 
 func clientIP(r *http.Request) string {
-	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
-		return v
-	}
-	if v := r.Header.Get("X-Forwarded-For"); v != "" {
-		return strings.TrimSpace(strings.SplitN(v, ",", 2)[0])
-	}
+	// The bot package has no access to the panel's trusted-proxy policy. Do
+	// not use forwarding headers here: callers can set them directly and would
+	// otherwise bypass the Mini App per-IP limiter by rotating fake addresses.
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
-		return r.RemoteAddr
+		return strings.TrimSpace(r.RemoteAddr)
 	}
-	return host
+	return strings.TrimSpace(host)
 }
 
 func webRL(h http.HandlerFunc) http.HandlerFunc {

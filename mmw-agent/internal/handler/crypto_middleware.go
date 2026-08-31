@@ -14,6 +14,8 @@ import (
 	"mmw-agent/internal/securechan"
 )
 
+const maxEncryptedRequestBodyBytes = 16 << 20
+
 // CryptoMiddleware 为 Pull 模式提供请求/响应加密。
 func CryptoMiddleware(masterPubKey ed25519.PublicKey, next http.Handler) http.Handler {
 	if masterPubKey == nil {
@@ -83,7 +85,11 @@ func CryptoMiddleware(masterPubKey ed25519.PublicKey, next http.Handler) http.Ha
 				return
 			}
 
-			body, _ := io.ReadAll(r.Body)
+			body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxEncryptedRequestBodyBytes))
+			if err != nil {
+				http.Error(w, `{"error":"request body too large"}`, http.StatusRequestEntityTooLarge)
+				return
+			}
 			if len(body) > 0 {
 				plaintext, err := session.Decrypt(body)
 				if err != nil {

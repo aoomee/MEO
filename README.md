@@ -36,6 +36,8 @@ services:
       MMWX_DATABASE_PATH: "/app/data/mmwx.db"
       MMWX_UPDATE_REPO: "off"
       MMWX_AGENT_GITHUB_REPO: "off"
+      MMWX_SETUP_TOKEN: ""
+      MMWX_TRUSTED_PROXIES: ""
     volumes:
       - mmwx-data:/app/data
     security_opt:
@@ -64,6 +66,8 @@ docker compose logs -f panel
 - 生产环境：`https://你的域名/login`
 
 不要直接通过公网 `http://IP:12889` 初始化。浏览器加密接口需要 HTTPS 或 localhost 安全上下文。
+
+首次初始化还受启动令牌保护：设置 `MMWX_SETUP_TOKEN`（至少 24 个字符）可固定令牌；留空时面板会生成随机令牌并写入启动日志。远程初始化时访问日志中给出的 `/api/setup/authorize?token=...` 一次即可获得短期 HttpOnly 授权 Cookie。若面板位于反向代理后，将 `MMWX_TRUSTED_PROXIES` 设置为代理的实际 IP 或 CIDR（逗号分隔）；默认只信任回环地址，不能把它设置为 `0.0.0.0/0`。
 
 ## Docker Compose：PostgreSQL
 
@@ -140,7 +144,7 @@ sudo systemctl restart mmwx
 
 ## 构建 Release 文件
 
-需要 Go 1.26+：
+需要 Go 1.27+：
 
 ```bash
 ./scripts/build-all.sh

@@ -6537,56 +6537,15 @@ function Sr() {
       },
       [],
     ));
-  const _0xd5bde8 = _0x38f6c7?.["appearance"]?.["theme"];
-  _0x246a53["useEffect"](() => {
-    if (!_0xd5bde8) return;
-    const _0x4d10ab = document["documentElement"],
-      _0x459a46 = _0x4d10ab["classList"]["contains"]("theme-flat"),
-      _0x239ead = _0x4d10ab["classList"]["contains"]("theme-anime"),
-      _0x309813 = _0x4d10ab["classList"]["contains"]("theme-premium");
-    return (
-      _0x4d10ab["classList"]["remove"](
-        "theme-flat",
-        "theme-anime",
-        "theme-premium",
-      ),
-      _0xd5bde8 === "flat" && _0x4d10ab["classList"]["add"]("theme-flat"),
-      _0xd5bde8 === "anime" && _0x4d10ab["classList"]["add"]("theme-anime"),
-      _0xd5bde8 === "premium" && _0x4d10ab["classList"]["add"]("theme-premium"),
-      () => {
-        (_0x4d10ab["classList"]["remove"](
-          "theme-flat",
-          "theme-anime",
-          "theme-premium",
-        ),
-          _0x459a46 && _0x4d10ab["classList"]["add"]("theme-flat"),
-          _0x239ead && _0x4d10ab["classList"]["add"]("theme-anime"),
-          _0x309813 && _0x4d10ab["classList"]["add"]("theme-premium"));
-      }
-    );
-  }, [_0xd5bde8]);
+  // MEO only ships the flat interface. Legacy anime/premium theme values are
+  // deliberately ignored so a stale server setting cannot re-enable them.
+  const _0xd5bde8 = "flat";
   const _0x159b05 = _0x58657f("public", !0x0, "probe_footer"),
     _0x212e20 = !!(_0x159b05["name"] || _0x159b05["displayName"]),
     _0x89b63a = _0x58657f("public", !0x0, "probe_header"),
     _0x174f61 = !!(_0x89b63a["name"] || _0x89b63a["displayName"]),
-    _0x120e0e = _0xd5bde8
-      ? _0xd5bde8 === "anime" || _0xd5bde8 === "flat" || _0xd5bde8 === "premium"
-      : typeof document < "u" &&
-        (document["documentElement"]["classList"]["contains"]("theme-anime") ||
-          document["documentElement"]["classList"]["contains"]("theme-flat") ||
-          document["documentElement"]["classList"]["contains"](
-            "theme-premium",
-          ));
-  return _0xd5bde8 === "premium" ||
-    (!_0xd5bde8 &&
-      typeof document < "u" &&
-      document["documentElement"]["classList"]["contains"]("theme-premium"))
-    ? _0x1e5c96["jsx"](or, {
-        data: _0x38f6c7,
-        isLoading: _0x36dadd,
-        isError: _0x21114c,
-      })
-    : !_0x38f6c7 && (_0x36dadd || _0x21114c)
+    _0x120e0e = true;
+  return !_0x38f6c7 && (_0x36dadd || _0x21114c)
       ? _0x1e5c96["jsx"]("div", {
           className:
             "bg-background\x20text-foreground\x20flex\x20min-h-svh\x20items-center\x20justify-center\x20px-6",

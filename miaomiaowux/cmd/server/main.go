@@ -378,10 +378,16 @@ func main() {
 	userRepo := auth.NewRepositoryAdapter(repo)
 
 	mux := http.NewServeMux()
+	setupProtector, err := handler.NewSetupProtector()
+	if err != nil {
+		logger.Error("初始化保护创建失败", "error", err)
+		os.Exit(1)
+	}
 	mux.Handle("/api/setup/status", handler.NewSetupStatusHandler(repo))
-	mux.Handle("/api/setup/init", handler.NewInitialSetupHandler(repo, dataDir))
-	mux.Handle("/api/setup/verify-domain", handler.NewVerifyDomainHandler())
-	mux.Handle("/api/setup/restore-backup", handler.NewSetupRestoreBackupHandler(repo, dataDir))
+	mux.Handle("/api/setup/authorize", setupProtector.AuthorizeHandler())
+	mux.Handle("/api/setup/init", setupProtector.Protect(handler.NewInitialSetupHandler(repo, dataDir)))
+	mux.Handle("/api/setup/verify-domain", setupProtector.Protect(handler.NewVerifyDomainHandler()))
+	mux.Handle("/api/setup/restore-backup", setupProtector.Protect(handler.NewSetupRestoreBackupHandler(repo, dataDir)))
 
 	// 从 system_settings 读 3 个安全限流器的自定义阈值(KV 缺失 → fallback hardcoded 默认值)。
 	// 同一份配置后面给 brute_force + subscription_rate 构造时复用。
@@ -1452,11 +1458,18 @@ func main() {
 	hostEnforcer := handler.NewHTTPSHostEnforcer(repo)
 	systemSettingsHandler.SetOnAccessSettingChanged(hostEnforcer.Refresh)
 	handlerWithHostEnforce := hostEnforcer.Middleware(handlerWithCORS)
+	handlerWithSecurityHeaders := handler.SecurityHeadersMiddleware(handlerWithHostEnforce)
+
+	if handler.SetupPending(context.Background(), repo) {
+		logger.Warn("面板尚未初始化；远程初始化前请访问一次授权地址", "path", "/api/setup/authorize?token="+setupProtector.Token())
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           handlerWithHostEnforce,
+		Handler:           handlerWithSecurityHeaders,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       90 * time.Second,
 	}
 	// PostgreSQL 首次迁移/回填可能跑十几分钟。反代在后端还没 Listen 时会 502。
 	// HTTP 栈一旦就绪就先接请求,后面的一次性回填不再挡端口。

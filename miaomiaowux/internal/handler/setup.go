@@ -18,6 +18,7 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
+	"miaomiaowux/internal/auth"
 	"miaomiaowux/internal/logger"
 	"miaomiaowux/internal/storage"
 	"miaomiaowux/templates"
@@ -64,14 +65,7 @@ func InsecureBrowserContext(r *http.Request) bool {
 	if r == nil {
 		return false
 	}
-	if r.TLS != nil {
-		return false
-	}
-	proto := strings.ToLower(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")))
-	if i := strings.IndexByte(proto, ','); i >= 0 {
-		proto = strings.TrimSpace(proto[:i])
-	}
-	if proto == "https" {
+	if requestIsHTTPS(r) {
 		return false
 	}
 	host := r.Host
@@ -254,7 +248,9 @@ func NewInitialSetupHandler(repo *storage.TrafficRepository, dataDir ...string) 
 		}
 
 		var payload setupRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&payload); err != nil {
 			logger.Error("[初始化] 解析请求体失败", "error", err)
 			writeError(w, http.StatusBadRequest, err)
 			return
@@ -281,8 +277,8 @@ func NewInitialSetupHandler(repo *storage.TrafficRepository, dataDir ...string) 
 			return
 		}
 
-		if password == "" {
-			writeError(w, http.StatusBadRequest, errors.New("密码不能为空"))
+		if err := auth.ValidateNewPassword(password); err != nil {
+			writeError(w, http.StatusBadRequest, errors.New("管理员密码至少 12 个字符，且不能超过 72 个 UTF-8 字节"))
 			return
 		}
 
@@ -373,6 +369,10 @@ func NewInitialSetupHandler(repo *storage.TrafficRepository, dataDir ...string) 
 		domain := strings.TrimSpace(payload.Domain)
 		if domain != "" {
 			domain = strings.ToLower(domain)
+			if !validVerificationDomain(domain) {
+				writeError(w, http.StatusBadRequest, errors.New("域名格式无效"))
+				return
+			}
 
 			port := "12889"
 			if _, p, err := net.SplitHostPort(r.Host); err == nil && p != "" {
@@ -415,15 +415,17 @@ func NewVerifyDomainHandler() http.Handler {
 		var req struct {
 			Domain string `json:"domain"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&req); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
 
 		domain := strings.TrimSpace(strings.ToLower(req.Domain))
-		if domain == "" {
+		if !validVerificationDomain(domain) {
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"success": false, "message": "域名不能为空"})
+			json.NewEncoder(w).Encode(map[string]any{"success": false, "message": "请输入有效域名"})
 			return
 		}
 
@@ -456,6 +458,26 @@ func NewVerifyDomainHandler() http.Handler {
 			"server_ip":  serverIP,
 		})
 	})
+}
+
+// validVerificationDomain keeps the setup DNS probe bounded to a hostname.
+// Rejecting IP literals, paths and unusual labels avoids turning this public
+// setup helper into an unbounded resolver/SSRF gadget.
+func validVerificationDomain(domain string) bool {
+	if domain == "" || len(domain) > 253 || net.ParseIP(domain) != nil || strings.Contains(domain, "..") {
+		return false
+	}
+	for _, label := range strings.Split(domain, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			if (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func getOutboundIP() string {

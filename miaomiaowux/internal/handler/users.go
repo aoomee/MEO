@@ -346,6 +346,10 @@ func NewUserResetPasswordHandler(repo *storage.TrafficRepository) http.Handler {
 			}
 			newPassword = generated
 		}
+		if err := auth.ValidateNewPassword(newPassword); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 		if err != nil {
@@ -422,6 +426,10 @@ func (h *userCreateHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		password = random
+	}
+	if err := auth.ValidateNewPassword(password); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
 	}
 	if nickname == "" {
 		nickname = username

@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -23,6 +24,13 @@ import (
 )
 
 var postgresClientInstallMu sync.Mutex
+
+const (
+	maxBackupUploadBytes    int64  = 512 << 20
+	maxBackupEntries               = 10_000
+	maxBackupExtractedBytes uint64 = 2 << 30
+	maxBackupEntryBytes     uint64 = 1 << 30
+)
 
 // NewBackupDownloadHandler 返回一个创建并下载 ZIP 备份的处理程序。
 // 该处理程序需要管理员身份验证。
@@ -425,8 +433,9 @@ type backupRestoreResult struct {
 // restoreFromRequest 读取上传的备份(加密或旧明文),解密(如需要)后提取到 data/ 与 subscribes/。
 // 出错时已写好响应并返回非 nil,调用方据此直接 return。
 func restoreFromRequest(w http.ResponseWriter, r *http.Request, repo *storage.TrafficRepository, dataDir string) (backupRestoreResult, error) {
-	// PostgreSQL custom dump 通常远大于旧 SQLite 备份。
-	r.Body = http.MaxBytesReader(w, r.Body, 1<<30)
+	// Bound compressed input as well as extracted contents. Limiting only the
+	// upload size still permits ZIP bombs to exhaust disk and CPU.
+	r.Body = http.MaxBytesReader(w, r.Body, maxBackupUploadBytes)
 
 	file, _, err := r.FormFile("backup")
 	if err != nil {
@@ -454,6 +463,10 @@ func restoreFromRequest(w http.ResponseWriter, r *http.Request, repo *storage.Tr
 			return backupRestoreResult{}, decryptErr
 		}
 		data = plain
+	}
+	if err := validateBackupArchive(data); err != nil {
+		writeBackupError(w, http.StatusBadRequest, err)
+		return backupRestoreResult{}, err
 	}
 
 	dump, hasPostgresDump, err := postgresDumpFromBackup(data)
@@ -804,13 +817,17 @@ func extractZipReader(reader *zip.Reader) error {
 }
 
 func extractZipReaderWithOptions(reader *zip.Reader, skipDatabaseConfig bool, dataDir string) error {
+	if err := validateBackupReader(reader); err != nil {
+		return err
+	}
+
 	// 首先验证 zip 内容
 	hasData := false
 	hasSubscribes := false
 	for _, f := range reader.File {
 		// 显式把反斜杠换成正斜杠:兼容旧版在 Windows 上生成的备份(zip 内路径为 data\...)。
 		// 注意不能用 filepath.ToSlash —— 它只在 Windows 生效,Linux 主控恢复 Windows 备份时不处理反斜杠。
-		name := strings.ReplaceAll(f.Name, "\\", "/")
+		name, _ := normalizedBackupName(f.Name)
 		if skipDatabaseConfig && name == "data/"+storage.DatabaseConfigFilename {
 			continue
 		}
@@ -828,13 +845,8 @@ func extractZipReaderWithOptions(reader *zip.Reader, skipDatabaseConfig bool, da
 
 	for _, f := range reader.File {
 		// 显式换掉反斜杠(兼容旧 Windows 备份);filepath.ToSlash 在 Linux 不处理反斜杠,故不能用。
-		name := strings.ReplaceAll(f.Name, "\\", "/")
+		name, _ := normalizedBackupName(f.Name)
 		if skipDatabaseConfig && name == "data/"+storage.DatabaseConfigFilename {
-			continue
-		}
-
-		// 安全检查：防止路径穿越
-		if strings.Contains(name, "..") {
 			continue
 		}
 
@@ -868,21 +880,24 @@ func extractZipReaderWithOptions(reader *zip.Reader, skipDatabaseConfig bool, da
 			return fmt.Errorf("failed to open zip file %s: %w", f.Name, err)
 		}
 
-		mode := f.Mode().Perm()
-		if mode == 0 {
-			mode = 0644
-		}
-		lowerBase := strings.ToLower(filepath.Base(destPath))
-		if strings.HasSuffix(lowerBase, ".key") || lowerBase == "privkey.pem" {
-			mode = 0600
-		}
+		// Restored data can include database credentials, API tokens and private
+		// keys. Never trust executable/world-readable mode bits stored in a ZIP.
+		mode := os.FileMode(0600)
 		tmpFile, err := os.CreateTemp(filepath.Dir(destPath), ".mmwx-restore-*")
 		if err != nil {
 			srcFile.Close()
 			return fmt.Errorf("failed to create temporary file for %s: %w", destPath, err)
 		}
 		tmpPath := tmpFile.Name()
-		_, err = io.Copy(tmpFile, srcFile)
+		limited := &io.LimitedReader{R: srcFile, N: int64(maxBackupEntryBytes) + 1}
+		written, copyErr := io.Copy(tmpFile, limited)
+		if copyErr == nil && uint64(written) != f.UncompressedSize64 {
+			copyErr = errors.New("解压后的实际大小与 ZIP 元数据不一致")
+		}
+		if copyErr == nil && written > int64(maxBackupEntryBytes) {
+			copyErr = errors.New("备份条目解压后超过大小限制")
+		}
+		err = copyErr
 		srcFile.Close()
 		if syncErr := tmpFile.Sync(); err == nil {
 			err = syncErr
@@ -905,6 +920,52 @@ func extractZipReaderWithOptions(reader *zip.Reader, skipDatabaseConfig bool, da
 	}
 
 	return nil
+}
+
+func validateBackupArchive(data []byte) error {
+	reader, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return fmt.Errorf("failed to open zip: %w", err)
+	}
+	return validateBackupReader(reader)
+}
+
+func validateBackupReader(reader *zip.Reader) error {
+	if len(reader.File) > maxBackupEntries {
+		return fmt.Errorf("备份文件条目超过 %d 个限制", maxBackupEntries)
+	}
+	var declaredTotal uint64
+	seen := make(map[string]struct{}, len(reader.File))
+	for _, f := range reader.File {
+		name, err := normalizedBackupName(f.Name)
+		if err != nil {
+			return err
+		}
+		if _, exists := seen[name]; exists {
+			return fmt.Errorf("备份包含重复路径: %s", name)
+		}
+		seen[name] = struct{}{}
+		if f.UncompressedSize64 > maxBackupEntryBytes {
+			return fmt.Errorf("备份条目解压后过大: %s", name)
+		}
+		if declaredTotal > maxBackupExtractedBytes-f.UncompressedSize64 {
+			return errors.New("备份解压后总大小超过 2 GiB 限制")
+		}
+		declaredTotal += f.UncompressedSize64
+	}
+	return nil
+}
+
+func normalizedBackupName(raw string) (string, error) {
+	name := strings.ReplaceAll(raw, "\\", "/")
+	if strings.ContainsRune(name, '\x00') || strings.HasPrefix(name, "/") {
+		return "", fmt.Errorf("备份包含非法路径: %q", raw)
+	}
+	cleaned := path.Clean(name)
+	if cleaned == "." || cleaned == ".." || strings.HasPrefix(cleaned, "../") {
+		return "", fmt.Errorf("备份包含越界路径: %q", raw)
+	}
+	return cleaned, nil
 }
 
 func writeBackupError(w http.ResponseWriter, status int, err error) {

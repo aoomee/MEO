@@ -94,11 +94,17 @@ func (h *DashboardWSHub) callJSON(handler http.Handler, target, username string)
 	return json.RawMessage(rec.Body.Bytes())
 }
 
-// checkOrigin:本 WS 用 URL query 里的 token 鉴权(非 ambient cookie),跨站页面拿不到 token,
-// 天然不存在跨站 WS 劫持(CSWSH),故无需 Origin 校验 —— 与现有 agent/测速 WS 一致返回 true。
-// (曾做「Origin host == 请求 Host」同源校验,但在 CDN/反代改写 Host 时会误拒合法连接。)
 func (h *DashboardWSHub) checkOrigin(r *http.Request) bool {
-	return true
+	if sameOriginOrNoOrigin(r) {
+		return true
+	}
+	origin := strings.TrimSpace(r.Header.Get("Origin"))
+	for _, allowed := range h.allowedOrigins {
+		if allowed == "*" || strings.EqualFold(strings.TrimSpace(allowed), origin) {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *DashboardWSHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {

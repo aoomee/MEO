@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 
@@ -28,7 +29,7 @@ func silentAuthenticate(r *http.Request, token string) bool {
 	}
 
 	if token == "" {
-		return true
+		return false
 	}
 
 	auth := r.Header.Get(constants.HeaderAuthorization)
@@ -40,8 +41,9 @@ func silentAuthenticate(r *http.Request, token string) bool {
 	}
 
 	if strings.HasPrefix(auth, constants.BearerPrefix) {
-		return strings.TrimPrefix(auth, constants.BearerPrefix) == token
+		candidate := strings.TrimPrefix(auth, constants.BearerPrefix)
+		return subtle.ConstantTimeCompare([]byte(candidate), []byte(token)) == 1
 	}
 
-	return auth == token
+	return subtle.ConstantTimeCompare([]byte(auth), []byte(token)) == 1
 }

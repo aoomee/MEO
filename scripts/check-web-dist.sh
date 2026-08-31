@@ -26,6 +26,36 @@ if grep -E -q "theme(Miaomiaowu|Anime|Premium)|'value':'(miaomiaowu|anime|premiu
   exit 1
 fi
 
+MINIMAL_CSS="${DIST_DIR}/assets/minimal.css"
+for REQUIRED_RULE in '.anime-starfield' '.nav-icon-anime' 'theme-minimal'; do
+  if ! grep -F -q -- "${REQUIRED_RULE}" "${MINIMAL_CSS}"; then
+    echo "minimal theme is missing legacy visual guard: ${REQUIRED_RULE}" >&2
+    exit 1
+  fi
+done
+if ! grep -F -q 'lockMinimalTheme' "${DIST_DIR}/index.html"; then
+  echo "index.html is missing the minimal-theme lock" >&2
+  exit 1
+fi
+
+# The active dashboard and settings chunks must not re-enable legacy visual
+# modes from stale localStorage/server state. Keep the PRO probe feature, but
+# reject only the removed theme selectors/classes in the chunks users execute.
+for ACTIVE_FILE in "${DIST_DIR}/assets/index-ZdYIAvvZ.js" "${DIST_DIR}/assets/settings-"*.js; do
+  if [[ -f "${ACTIVE_FILE}" ]] && grep -E -q "theme-(anime|premium|pixel)|'value':'(anime|premium|pixel)'" "${ACTIVE_FILE}"; then
+    echo "legacy theme selector found in active bundle: ${ACTIVE_FILE}" >&2
+    exit 1
+  fi
+done
+
+SYSTEM_SETTINGS_FILE="${DIST_DIR}/assets/system-settings-"*.js
+for ACTIVE_FILE in ${SYSTEM_SETTINGS_FILE}; do
+  if [[ -f "${ACTIVE_FILE}" ]] && grep -E -q "Premium|theme-(anime|premium|pixel)|[\"']pixel[\"']" "${ACTIVE_FILE}"; then
+    echo "legacy/premium theme text found in system settings bundle: ${ACTIVE_FILE}" >&2
+    exit 1
+  fi
+done
+
 while IFS= read -r asset_path; do
   test -f "${DIST_DIR}/${asset_path#/}" || {
     echo "index.html references missing asset: ${asset_path}" >&2

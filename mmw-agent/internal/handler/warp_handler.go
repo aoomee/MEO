@@ -10,6 +10,7 @@ package handler
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -182,19 +183,19 @@ func (h *WarpHandler) statusResponse(st *warp.State) map[string]any {
 		return map[string]any{"installed": false}
 	}
 	return map[string]any{
-		"installed":     true,
+		"installed":      true,
 		"license_active": st.LicenseKey != "",
-		"device_id":     st.DeviceID,
-		"addr_v4":       st.AddrV4,
-		"addr_v6":       st.AddrV6,
-		"registered_at": st.RegisteredAt,
+		"device_id":      st.DeviceID,
+		"addr_v4":        st.AddrV4,
+		"addr_v6":        st.AddrV6,
+		"registered_at":  st.RegisteredAt,
 	}
 }
 
 func (h *WarpHandler) auth(r *http.Request) bool {
 	// 跟 ManageHandler.authenticate 同款:Bearer token + ws_rpc 来源跳过(crypto_middleware 已校 master 身份)
 	token := r.Header.Get("Authorization")
-	if rpc := r.Header.Get("X-WS-RPC"); rpc == "1" {
+	if rpc := r.Header.Get("X-WS-RPC"); rpc == "1" && r.RemoteAddr == "ws-rpc" {
 		return true
 	}
 	if h.configToken == "" {
@@ -202,7 +203,7 @@ func (h *WarpHandler) auth(r *http.Request) bool {
 	}
 	const prefix = "Bearer "
 	if len(token) > len(prefix) && token[:len(prefix)] == prefix {
-		return token[len(prefix):] == h.configToken
+		return subtle.ConstantTimeCompare([]byte(token[len(prefix):]), []byte(h.configToken)) == 1
 	}
 	return false
 }

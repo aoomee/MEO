@@ -1,7 +1,10 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -158,6 +161,17 @@ func (h *XrayServerHandler) ServeAgentBinary(w http.ResponseWriter, r *http.Requ
 	info, err := f.Stat()
 	if err != nil || info.IsDir() {
 		http.Error(w, "Agent 二进制不可读", http.StatusInternalServerError)
+		return
+	}
+	if r.URL.Query().Get("checksum") == "sha256" {
+		hash := sha256.New()
+		if _, err := io.Copy(hash, f); err != nil {
+			http.Error(w, "Agent 二进制校验失败", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Cache-Control", "no-store")
+		_, _ = fmt.Fprintf(w, "%x  mmwx-agent-linux-%s\n", hash.Sum(nil), arch)
 		return
 	}
 

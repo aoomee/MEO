@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUTPUT_DIR="${OUTPUT_DIR:-${ROOT_DIR}/build}"
 
-command -v go >/dev/null 2>&1 || { echo "Go 1.26+ is required" >&2; exit 1; }
+command -v go >/dev/null 2>&1 || { echo "Go 1.27+ is required" >&2; exit 1; }
 test -f "${ROOT_DIR}/miaomiaowux/internal/web/dist/index.html" || { echo "missing embedded frontend" >&2; exit 1; }
 
 mkdir -p "${OUTPUT_DIR}"

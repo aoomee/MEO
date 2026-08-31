@@ -24,7 +24,8 @@ func NewTwoFactorLoginHandler(tokens *auth.TokenStore, repo *storage.TrafficRepo
 			TwoFactorToken string `json:"two_factor_token"`
 			Code           string `json:"code"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -62,7 +63,8 @@ func NewRecoveryLoginHandler(tokens *auth.TokenStore, repo *storage.TrafficRepos
 			TwoFactorToken string `json:"two_factor_token"`
 			RecoveryCode   string `json:"recovery_code"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -134,7 +136,8 @@ func NewTwoFactorSetupHandler(manager *auth.Manager, repo *storage.TrafficReposi
 		var payload struct {
 			Password string `json:"password"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -185,7 +188,8 @@ func NewTwoFactorVerifySetupHandler(repo *storage.TrafficRepository) http.Handle
 		var payload struct {
 			Code string `json:"code"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -236,7 +240,8 @@ func NewTwoFactorDisableHandler(manager *auth.Manager, repo *storage.TrafficRepo
 		var payload struct {
 			Code string `json:"code"`
 		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

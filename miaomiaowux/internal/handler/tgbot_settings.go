@@ -44,14 +44,20 @@ func (h *TGBotSettingsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request)
 }
 
 func observedPublicBaseURL(r *http.Request) string {
-	host := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0])
+	host := ""
+	if trustedProxyRequest(r) {
+		host = strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0])
+	}
 	if host == "" {
 		host = strings.TrimSpace(r.Host)
 	}
 	if host == "" || strings.ContainsAny(host, "\r\n/\\") {
 		return ""
 	}
-	proto := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
+	proto := ""
+	if trustedProxyRequest(r) {
+		proto = strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Proto"), ",")[0])
+	}
 	if proto != "http" && proto != "https" {
 		if r.TLS != nil {
 			proto = "https"

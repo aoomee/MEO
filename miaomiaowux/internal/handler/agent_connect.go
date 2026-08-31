@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -107,8 +108,7 @@ func (h *ChildAPIHandler) ServeSpeedHTTP(w http.ResponseWriter, r *http.Request)
 // 验证检查请求是否被授权
 func (h *ChildAPIHandler) authenticate(r *http.Request) bool {
 	if h.configToken == "" {
-		// 如果未配置令牌，则允许所有请求（不建议用于生产）
-		return true
+		return false
 	}
 
 	// 检查授权标头
@@ -120,11 +120,11 @@ func (h *ChildAPIHandler) authenticate(r *http.Request) bool {
 	// 支持“Bearer <token>”格式
 	if strings.HasPrefix(auth, "Bearer ") {
 		token := strings.TrimPrefix(auth, "Bearer ")
-		return token == h.configToken
+		return subtle.ConstantTimeCompare([]byte(token), []byte(h.configToken)) == 1
 	}
 
 	// 还支持普通令牌
-	return auth == h.configToken
+	return subtle.ConstantTimeCompare([]byte(auth), []byte(h.configToken)) == 1
 }
 
 // RemoteHeartbeatRequest代表来自远程服务器的心跳请求
@@ -590,17 +590,17 @@ func (h *XrayServerHandler) RemoteHeartbeat(w http.ResponseWriter, r *http.Reque
 
 	// 解析请求体
 	var req RemoteHeartbeatRequest
-	json.Unmarshal(crypto.Body, &req)
+	if err := json.Unmarshal(crypto.Body, &req); err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		_ = json.NewEncoder(w).Encode(RemoteHeartbeatResponse{Success: false, Message: "请求体格式错误", ServerTime: time.Now().Unix()})
+		return
+	}
 
 	// 获取客户端IP — X-Forwarded-For > X-Real-IP > r.RemoteAddr
-	rawIP := r.RemoteAddr
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		// 从逗号分隔列表中获取第一个 IP
-		rawIP = strings.Split(forwarded, ",")[0]
-		rawIP = strings.TrimSpace(rawIP)
-	} else if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		rawIP = realIP
-	}
+	// Only an explicitly trusted reverse proxy may supply forwarding headers;
+	// otherwise an attacker could poison the stored node address.
+	rawIP := GetClientIP(r)
 	// 用 stripPort 正确处理 v4 / [v6]:port / 裸 v6 三种形式。
 	// 老代码用 strings.LastIndex(":") 截断,对裸 v6 会把最后一段误删,留下半截 v6 字符串塞进 db.ip_address。
 	clientIP := stripPort(rawIP)
@@ -968,7 +968,7 @@ func (h *XrayServerHandler) GetRemoteInstallScript(w http.ResponseWriter, r *htt
 	// nginx 默认 `proxy_set_header Host $host` 不带端口,导致 cf:8443 → nginx → mmwx 时 r.Host 只有域名,
 	// agent 安装命令缺端口连不上主控。这里如果检测到 X-Forwarded-Host(带端口最优)或 X-Forwarded-Port
 	// 且端口不是 80/443,主动把 :port 拼回去,方便用户不需要必须先去配 master_url 就能拿到正确安装命令。
-	if !strings.Contains(scriptServer, ":") {
+	if trustedProxyRequest(r) && !strings.Contains(scriptServer, ":") {
 		if xfh := strings.TrimSpace(r.Header.Get("X-Forwarded-Host")); xfh != "" && strings.Contains(xfh, ":") {
 			scriptServer = xfh
 		} else if xfp := strings.TrimSpace(r.Header.Get("X-Forwarded-Port")); xfp != "" && xfp != "80" && xfp != "443" {
@@ -976,9 +976,11 @@ func (h *XrayServerHandler) GetRemoteInstallScript(w http.ResponseWriter, r *htt
 		}
 	}
 	scriptProtocol := ""
-	// nginx 反代下大概率有 X-Forwarded-Proto,带这个就别走脚本里 "host 有 : 就当 http" 的启发,直接显式 https
-	if xfproto := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")); xfproto == "https" || xfproto == "http" {
-		scriptProtocol = xfproto
+	// Only a direct TLS connection or an explicitly trusted reverse proxy may
+	// influence the generated scheme. Never let an arbitrary client inject
+	// X-Forwarded-Proto and make an administrator copy a downgraded URL.
+	if requestIsHTTPS(r) {
+		scriptProtocol = "https"
 	}
 	if mu, err := h.repo.GetSystemSetting(r.Context(), "master_url"); err == nil {
 		mu = strings.TrimSpace(mu)
@@ -1264,9 +1266,9 @@ rm -f /tmp/mmw-agent /tmp/mmw-agent-new /tmp/mmw-agent-new.sig \
 # Step 2: Create config directory first
 echo ""
 echo "[2/6] Creating configuration..."
-mkdir -p /etc/mmw-agent
-mkdir -p /var/lib/mmw-agent
-mkdir -p /var/lib/mmwx-guard
+install -d -m 0700 /etc/mmw-agent
+install -d -m 0700 /var/lib/mmw-agent
+install -d -m 0700 /var/lib/mmwx-guard
 
 # 端口探测:从 LISTEN_PORT(或默认 23889)起,被占用就 +1,最多试 20 次。
 # 用 ss 看任意接口的 LISTEN socket,避免 agent 启动后 bind 失败造成"WS 活/HTTP 死"的死锁状态。
@@ -1310,6 +1312,7 @@ steal_mode: $([ "$AUTO_STEAL_SELF" = "1" ] && echo "tunnel" || echo "")
 master_public_key: ${MASTER_PUBLIC_KEY}
 listen_port: "${LISTEN_PORT}"
 EOF
+chmod 0600 "$CONFIG_PATH"
 
 echo "Configuration saved to /etc/mmw-agent/config.yaml"
 
@@ -1329,6 +1332,10 @@ ExecStart=/usr/local/bin/mmw-agent -c /etc/mmw-agent/config.yaml
 Restart=always
 RestartSec=5
 WorkingDirectory=/var/lib/mmw-agent
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
 
 [Install]
 WantedBy=multi-user.target
@@ -1499,9 +1506,10 @@ download_file() { # download_file <url> <output> <max-seconds>
 }
 # 从主控下载 Agent 并原子安装。
 download_ok=0
+downloaded_url=""
 for agent_url in "${MIRRORS[@]}"; do
 	echo "Downloading Agent from $agent_url ..."
-	if download_file "$agent_url" "$AGENT_NEW" 180; then download_ok=1; break; fi
+	if download_file "$agent_url" "$AGENT_NEW" 180; then download_ok=1; downloaded_url="$agent_url"; break; fi
 	echo "  → 该镜像失败,尝试下一个..."
 done
 if [ "$download_ok" != "1" ]; then
@@ -1510,6 +1518,32 @@ if [ "$download_ok" != "1" ]; then
 	echo "       2) 或把 mmwx-agent-linux-${ARCH_NAME} 放到主控的 <数据目录>/agent-bin/ 下,由主控直接分发" >&2
 	exit 1
 fi
+
+# Every remotely downloaded executable must match a checksum delivered by the
+# same release/source. This catches corruption and prevents transparent binary
+# substitution by an untrusted mirror.
+CHECKSUM_FILE="$STAGING_DIR/agent.sha256"
+checksum_name="$(basename "$downloaded_url")"
+checksum_name="${checksum_name%%\?*}"
+case "$downloaded_url" in
+    *"/api/remote/agent-binary?"*)
+        checksum_url="${downloaded_url}&checksum=sha256"
+        checksum_name="mmwx-agent-linux-${ARCH_NAME}"
+        ;;
+    *"github.com/"*"/releases/download/"*) checksum_url="${downloaded_url%/*}/SHA256SUMS-${ARCH_NAME}" ;;
+    *) checksum_url="${downloaded_url}.sha256" ;;
+esac
+if ! download_file "$checksum_url" "$CHECKSUM_FILE" 60; then
+    echo "ERROR: 无法下载 Agent SHA-256 校验文件: $checksum_url" >&2
+    exit 1
+fi
+expected_sha=$(awk -v name="$checksum_name" '$2 == name || $2 == "*" name {print $1; exit} NF == 1 && length($1) == 64 {print $1; exit}' "$CHECKSUM_FILE")
+actual_sha=$(sha256sum "$AGENT_NEW" | awk '{print $1}')
+if [ -z "$expected_sha" ] || [ "$actual_sha" != "$expected_sha" ]; then
+    echo "ERROR: Agent SHA-256 校验失败，拒绝安装" >&2
+    exit 1
+fi
+echo "Agent SHA-256 verified."
 chmod 0755 "$AGENT_NEW"
 AGENT_BIN=/usr/local/bin/mmw-agent
 if [ -f "$AGENT_BIN" ]; then cp -p "$AGENT_BIN" "$STAGING_DIR/agent.old"; fi
@@ -1613,7 +1647,10 @@ if [ "$XRAY_MODE" != "embedded" ]; then
 }
 XRAYPLACEHOLDERCFG
         fi
-        bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install
+        XRAY_SCRIPT=$(mktemp)
+        trap 'rm -f "$XRAY_SCRIPT"' EXIT
+        curl -fsSL --connect-timeout 10 --max-time 120 -o "$XRAY_SCRIPT" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh
+        bash "$XRAY_SCRIPT" @ install
     fi
 fi
 
@@ -1645,7 +1682,10 @@ if [ "$AUTO_STEAL_SELF" = "1" ]; then
         exit 1
     else
         echo "[Auto] Installing Nginx..."
-        curl -fsSL "${MASTER_URL}/api/remote/nginx-script?token=${TOKEN}&action=install" | bash
+        NGINX_SCRIPT=$(mktemp)
+        trap 'rm -f "$NGINX_SCRIPT"' EXIT
+        curl -fsSL --connect-timeout 10 --max-time 120 -o "$NGINX_SCRIPT" "${MASTER_URL}/api/remote/nginx-script?token=${TOKEN}&action=install"
+        bash "$NGINX_SCRIPT"
     fi
     echo ""
     echo "Auto install complete (front service: ${FRONT_SERVICE}, xray mode: ${XRAY_MODE})"

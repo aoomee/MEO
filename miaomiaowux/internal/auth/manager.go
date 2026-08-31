@@ -74,6 +74,9 @@ func (m *Manager) Update(ctx context.Context, username, password string) error {
 	}
 
 	if password != "" {
+		if err := ValidateNewPassword(password); err != nil {
+			return err
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			return err
@@ -94,6 +97,9 @@ func (m *Manager) ChangePassword(ctx context.Context, username, currentPassword,
 	}
 	if currentPassword == "" || newPassword == "" {
 		return errors.New("passwords are required")
+	}
+	if err := ValidateNewPassword(newPassword); err != nil {
+		return err
 	}
 
 	user, err := m.repo.GetUser(ctx, username)

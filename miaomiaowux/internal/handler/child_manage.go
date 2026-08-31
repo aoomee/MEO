@@ -246,7 +246,7 @@ func (h *ChildManageHandler) HandleXrayInstall(w http.ResponseWriter, r *http.Re
 	log.Printf("[Child Manage] Installing Xray...")
 
 	// 运行 xray 安装脚本
-	cmd := exec.Command("bash", "-c", "bash -c \"$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ install")
+	cmd := exec.Command("bash", "-c", "tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash \"$tmp\" @ install")
 	cmd.Env = os.Environ()
 
 	var stdout, stderr bytes.Buffer
@@ -284,7 +284,7 @@ func (h *ChildManageHandler) HandleXrayRemove(w http.ResponseWriter, r *http.Req
 	log.Printf("[Child Manage] Removing Xray...")
 
 	// 运行 X 射线删除脚本
-	cmd := exec.Command("bash", "-c", "bash -c \"$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ remove")
+	cmd := exec.Command("bash", "-c", "tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash \"$tmp\" @ remove")
 	cmd.Env = os.Environ()
 
 	var stdout, stderr bytes.Buffer

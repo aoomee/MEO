@@ -572,9 +572,7 @@ func NewRemoteWSHandler(repo *storage.TrafficRepository, collector *traffic.Coll
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				return true // 允许远程服务器连接的所有来源
-			},
+			CheckOrigin:     sameOriginOrNoOrigin,
 		},
 	}
 	go h.leaseWorker()
@@ -762,24 +760,10 @@ const (
 	tokenConflictCooldown = 60 * time.Second
 )
 
-// ipFromRequest 提取客户端真实 IP,优先级:CF-Connecting-IP > X-Real-IP > X-Forwarded-For > RemoteAddr。
+// ipFromRequest 提取客户端真实 IP。转发头只有在 RemoteAddr 属于
+// MMWX_TRUSTED_PROXIES 时才会被 GetClientIP 接受，避免伪造地址绕过限流。
 func ipFromRequest(r *http.Request) string {
-	if cfIP := r.Header.Get("CF-Connecting-IP"); cfIP != "" {
-		return cfIP
-	}
-	if realIP := r.Header.Get("X-Real-IP"); realIP != "" {
-		return realIP
-	}
-	if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
-		if parts := strings.SplitN(forwarded, ",", 2); len(parts) > 0 {
-			return strings.TrimSpace(parts[0])
-		}
-	}
-	// RemoteAddr 形如 "1.2.3.4:54321",剥 port 但容忍 IPv6
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
-		return host
-	}
-	return r.RemoteAddr
+	return GetClientIP(r)
 }
 
 // shouldRejectIP 在 upgrade 前调用,看该 IP 是否在 cooldown 期内。

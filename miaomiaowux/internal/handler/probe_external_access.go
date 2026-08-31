@@ -75,8 +75,13 @@ func probeSameOriginRequest(repo *storage.TrafficRepository, r *http.Request) bo
 		}
 	}
 	addHost(r.Host)
-	if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0]); forwarded != "" {
-		addHost(forwarded)
+	// X-Forwarded-Host is client-controlled unless the immediate peer is an
+	// explicitly trusted reverse proxy. Never let an Internet client widen the
+	// same-origin allow-list by supplying this header directly.
+	if trustedProxyRequest(r) {
+		if forwarded := strings.TrimSpace(strings.Split(r.Header.Get("X-Forwarded-Host"), ",")[0]); forwarded != "" {
+			addHost(forwarded)
+		}
 	}
 	if masterURL, _ := repo.GetSystemSetting(r.Context(), "master_url"); masterURL != "" {
 		if parsed, err := url.Parse(strings.TrimSpace(masterURL)); err == nil {

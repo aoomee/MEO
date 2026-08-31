@@ -236,6 +236,11 @@ func main() {
 	var err error
 
 	if cfgFile != "" {
+		// config.yaml contains the master token. Repair permissions on every start
+		// so older installations cannot leak it to other local users.
+		if err := os.Chmod(cfgFile, 0600); err != nil {
+			log.Fatalf("Failed to secure config file permissions: %v", err)
+		}
 		cfg, err = config.Load(cfgFile)
 		if err != nil {
 			log.Fatalf("Failed to load config: %v", err)

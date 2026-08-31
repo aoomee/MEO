@@ -379,6 +379,17 @@ html.dark.theme-minimal .app-brand-link::before {
   display: none !important;
 }
 
+/* The shipped entry bundle still contains legacy decorative nodes for
+ * compatibility.  Minimal mode must make those nodes inert and invisible,
+ * including the old anime icon variants and starfield renderer. */
+.theme-minimal .anime-starfield,
+.theme-minimal .anime-star,
+.theme-minimal .nav-icon-anime,
+.theme-minimal [class^="anime-"],
+.theme-minimal [class*=" anime-"] {
+  display: none !important;
+}
+
 .theme-minimal [id^="category-"] + div {
   gap: 0 !important;
 }

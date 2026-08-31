@@ -3039,5 +3039,8 @@ func (c *Client) persistConfigField(key, value string) error {
 		lines = append(lines, key+": "+value)
 	}
 
-	return os.WriteFile(cfgPath, []byte(strings.Join(lines, "\n")), 0644)
+	if err := os.WriteFile(cfgPath, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+		return err
+	}
+	return os.Chmod(cfgPath, 0600)
 }

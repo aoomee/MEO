@@ -11,6 +11,8 @@ import (
 	"miaomiaowux/internal/securechan"
 )
 
+const maxRemoteHTTPBodyBytes int64 = 16 << 20
+
 // CryptoConfig 统一加密配置，所有 handler 共享同一个实例
 type CryptoConfig struct {
 	Identity     *securechan.MasterIdentity
@@ -36,7 +38,11 @@ type httpCryptoResult struct {
 // 返回解密后的 body 和 session（用于加密响应）。
 func handleHTTPCrypto(r *http.Request, w http.ResponseWriter, cc *CryptoConfig) (*httpCryptoResult, error) {
 	token := extractToken(r)
-	body, _ := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxRemoteHTTPBodyBytes))
+	if err != nil {
+		http.Error(w, `{"success":false,"error":"request body too large"}`, http.StatusRequestEntityTooLarge)
+		return nil, err
+	}
 
 	identity := cc.Identity
 	cache := cc.SessionCache

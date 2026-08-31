@@ -38,6 +38,13 @@ func (w *countingDiscardWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
+// shellQuote returns a POSIX-shell-safe single-quoted argument. Install
+// commands are copied by an administrator and must not become an injection
+// primitive if a Host/master_url value contains shell metacharacters.
+func shellQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
 type XrayServerHandler struct {
 	repo              *storage.TrafficRepository
 	collector         *traffic.Collector
@@ -732,11 +739,8 @@ func (h *XrayServerHandler) CreateRemoteServer(w stdhttp.ResponseWriter, r *stdh
 	if serverURL == "" {
 		host := r.Host
 		scheme := "http"
-		if r.TLS != nil {
+		if requestIsHTTPS(r) {
 			scheme = "https"
-		}
-		if forwardedProto := r.Header.Get("X-Forwarded-Proto"); forwardedProto != "" {
-			scheme = forwardedProto
 		}
 		if host != "" {
 			serverURL = fmt.Sprintf("%s://%s", scheme, host)
@@ -770,12 +774,12 @@ func (h *XrayServerHandler) CreateRemoteServer(w stdhttp.ResponseWriter, r *stdh
 	var installCommand string
 	switch connectionMode {
 	case storage.ConnectionModeWebSocket:
-		installCommand = fmt.Sprintf("curl -fsSL '%s' | bash -s -- --mode=websocket", installScriptURL)
+		installCommand = fmt.Sprintf("tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" %s && bash \"$tmp\" --mode=websocket", shellQuote(installScriptURL))
 	case storage.ConnectionModePull:
 		// 对于pull模式，子服务器只需要暴露一个API，不需要安装命令
 		installCommand = fmt.Sprintf("# pull模式：主服务器将从 %s:%d 拉取流量数据\n# 请确保子服务器已配置 MMWX_MODE=child MMWX_CHILD_API_TOKEN=%s", req.PullAddress, req.PullPort, agentToken)
 	default:
-		installCommand = fmt.Sprintf("curl -fsSL '%s' | bash", installScriptURL)
+		installCommand = fmt.Sprintf("tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" %s && bash \"$tmp\"", shellQuote(installScriptURL))
 	}
 
 	w.Header().Set("Content-Type", "application/json")

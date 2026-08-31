@@ -546,12 +546,12 @@ func (h *TGBotAPIHandler) bindNew(ctx context.Context, w http.ResponseWriter,
 		return
 	}
 
-	// 密码:用户自定义优先(>=6 位),否则随机生成。
+	// 密码:用户自定义优先(统一使用 12 字符安全基线),否则随机生成。
 	plainPw := strings.TrimSpace(password)
 	userSetPw := plainPw != ""
 	if userSetPw {
-		if len(plainPw) < 6 || len(plainPw) > 64 {
-			writeJSONError(w, http.StatusBadRequest, "密码长度需 6-64 位")
+		if err := auth.ValidateNewPassword(plainPw); err != nil {
+			writeJSONError(w, http.StatusBadRequest, err.Error())
 			return
 		}
 	} else {

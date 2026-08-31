@@ -86,6 +86,21 @@ elif [[ -n "${REPO}" ]]; then
   fi
   echo "Downloading ${ASSET} from ${REPO}@${RELEASE_TAG}"
   curl "${CURL_ARGS[@]}" "${URL}"
+
+	CHECKSUM_URL="https://github.com/${REPO}/releases/download/${RELEASE_TAG}/SHA256SUMS-${ARCH}"
+	CHECKSUM_FILE="${STAGING_DIR}/SHA256SUMS-${ARCH}"
+	CHECKSUM_ARGS=(--fail --silent --show-error --location --retry 3 --output "${CHECKSUM_FILE}")
+	if [[ -n "${TOKEN}" ]]; then
+		CHECKSUM_ARGS+=(--header "Authorization: Bearer ${TOKEN}")
+	fi
+	curl "${CHECKSUM_ARGS[@]}" "${CHECKSUM_URL}"
+	EXPECTED_SHA="$(awk -v name="${ASSET}" '$2 == name || $2 == "*" name {print $1; exit}' "${CHECKSUM_FILE}")"
+	ACTUAL_SHA="$(sha256sum "${STAGED_BINARY}" | awk '{print $1}')"
+	[[ -n "${EXPECTED_SHA}" && "${ACTUAL_SHA}" == "${EXPECTED_SHA}" ]] || {
+		echo "SHA-256 verification failed for ${ASSET}" >&2
+		exit 1
+	}
+	echo "SHA-256 verified: ${ASSET}"
 else
   echo "Provide --binary PATH or --repo OWNER/REPO." >&2
   exit 2

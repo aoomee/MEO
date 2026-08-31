@@ -25,6 +25,11 @@ CURRENT_GROUP=$(id -gn)
 
 # 获取最新的nginx版本号
 get_latest_nginx_version() {
+    # 固定到经过审计的版本，避免自动执行未经验证的新源码。
+    NGINX_VERSION="1.31.1"
+    NGINX_SHA256="9fcaaeb8f22544b09a19a761f3412c4112215422401634bebdd1296a403cc4bc"
+    print_info "使用已固定并校验的 nginx-${NGINX_VERSION}"
+    return
     print_info "正在获取最新的 nginx 版本号..."
     # 从nginx官网获取最新稳定版本号
     NGINX_VERSION=$(curl -s https://nginx.org/en/download.html | grep -oP 'nginx-\K[0-9]+\.[0-9]+\.[0-9]+(?=\.tar\.gz">nginx)' | head -1)
@@ -90,7 +95,7 @@ install_dependencies() {
     # 如果启用 ACME 模块，安装额外依赖(libpcre2-dev 已在上面装过)
     if [ "$ENABLE_ACME" = "1" ]; then
         print_info "安装 nginx-acme 模块所需的额外依赖..."
-        $USE_SUDO apt install -y libclang-dev pkg-config git
+        $USE_SUDO apt install -y libclang-dev pkg-config git cargo rustc
     fi
 
     print_info "编译环境安装完成"
@@ -108,10 +113,8 @@ install_rust() {
         RUST_VERSION=$(rustc --version)
         print_info "已安装 Rust: $RUST_VERSION"
     else
-        print_info "安装 Rust 工具链..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source "$HOME/.cargo/env"
-        print_info "Rust 安装完成: $(rustc --version)"
+        print_error "未找到 Rust 工具链；请通过系统包管理器安装 rustc/cargo 后重试"
+        exit 1
     fi
 }
 
@@ -120,6 +123,7 @@ download_nginx() {
     print_info "步骤 2/8: 下载并解压 nginx-${NGINX_VERSION}..."
     cd /tmp
     wget -q --show-progress https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
+    printf '%s  %s\n' "$NGINX_SHA256" "nginx-${NGINX_VERSION}.tar.gz" | sha256sum -c -
     tar -xf nginx-${NGINX_VERSION}.tar.gz
     print_info "nginx 源码解压完成"
 }
@@ -138,7 +142,8 @@ download_nginx_acme() {
     if [ -d "nginx-acme" ]; then
         rm -rf nginx-acme
     fi
-    git clone --depth 1 https://github.com/nginx/nginx-acme.git
+    git clone https://github.com/nginx/nginx-acme.git
+    git -C nginx-acme checkout --detach aabca6b28f91ee11d22bdfa52f07e6f0ae74e9fe
     print_info "nginx-acme 模块下载完成"
 }
 

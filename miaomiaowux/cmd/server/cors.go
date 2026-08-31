@@ -16,7 +16,9 @@ func getAllowedOrigins() []string {
 
 func parseAllowedOrigins(raw string) []string {
 	if raw == "" {
-		return []string{"*"}
+		// Same-origin browser requests do not need CORS headers. Defaulting to
+		// wildcard silently exposes every API to arbitrary websites.
+		return nil
 	}
 	parts := strings.Split(raw, ",")
 	var origins []string
@@ -26,7 +28,7 @@ func parseAllowedOrigins(raw string) []string {
 		}
 	}
 	if len(origins) == 0 {
-		return []string{"*"}
+		return nil
 	}
 	return origins
 }
@@ -35,7 +37,7 @@ func withCORS(next http.Handler, allowedOrigins []string) http.Handler {
 	if next == nil {
 		return http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})
 	}
-	allowAll := len(allowedOrigins) == 0 || (len(allowedOrigins) == 1 && allowedOrigins[0] == "*")
+	allowAll := len(allowedOrigins) == 1 && allowedOrigins[0] == "*"
 
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")

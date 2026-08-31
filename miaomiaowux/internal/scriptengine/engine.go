@@ -7,15 +7,20 @@ import (
 	"strings"
 	"time"
 
-	"miaomiaowux/internal/logger"
 	"github.com/MMWOrg/mmwX-plugins/proxyparser/substore"
+	"miaomiaowux/internal/logger"
 
 	"github.com/dop251/goja"
 )
 
-const defaultTimeout = 5 * time.Second
+const (
+	defaultTimeout     = 5 * time.Second
+	maxScriptBytes     = 64 << 10
+	maxScriptInputSize = 16 << 20
+)
 
 func setupVM(vm *goja.Runtime) {
+	vm.SetMaxCallStackSize(256)
 	console := vm.NewObject()
 	makeLogFn := func(level string) func(goja.FunctionCall) goja.Value {
 		return func(call goja.FunctionCall) goja.Value {
@@ -72,12 +77,18 @@ func setupVM(vm *goja.Runtime) {
 // RunPostFetch executes a "post_fetch" script against a full config map.
 // The script must define: function main(config) { ... return config; }
 func RunPostFetch(ctx context.Context, script string, config map[string]interface{}) (map[string]interface{}, error) {
+	if len(script) > maxScriptBytes {
+		return nil, fmt.Errorf("script content exceeds 64 KiB limit")
+	}
 	vm := goja.New()
 	setupVM(vm)
 
 	jsonBytes, err := json.Marshal(config)
 	if err != nil {
 		return nil, fmt.Errorf("marshal config to JSON: %w", err)
+	}
+	if len(jsonBytes) > maxScriptInputSize {
+		return nil, fmt.Errorf("script input exceeds 16 MiB limit")
 	}
 
 	if err := vm.Set("__raw_json__", string(jsonBytes)); err != nil {
@@ -105,12 +116,18 @@ func RunPostFetch(ctx context.Context, script string, config map[string]interfac
 // RunPreSaveNodes executes a "pre_save_nodes" script against a proxies array.
 // The script must define: function main(proxies) { ... return proxies; }
 func RunPreSaveNodes(ctx context.Context, script string, proxies []map[string]interface{}) ([]map[string]interface{}, error) {
+	if len(script) > maxScriptBytes {
+		return nil, fmt.Errorf("script content exceeds 64 KiB limit")
+	}
 	vm := goja.New()
 	setupVM(vm)
 
 	jsonBytes, err := json.Marshal(proxies)
 	if err != nil {
 		return nil, fmt.Errorf("marshal proxies to JSON: %w", err)
+	}
+	if len(jsonBytes) > maxScriptInputSize {
+		return nil, fmt.Errorf("script input exceeds 16 MiB limit")
 	}
 
 	if err := vm.Set("__raw_json__", string(jsonBytes)); err != nil {
@@ -150,6 +167,9 @@ func RunPreSaveNodes(ctx context.Context, script string, proxies []map[string]in
 func Lint(content string) error {
 	if strings.TrimSpace(content) == "" {
 		return fmt.Errorf("script content is empty")
+	}
+	if len(content) > maxScriptBytes {
+		return fmt.Errorf("script content exceeds 64 KiB limit")
 	}
 	if _, err := goja.Compile("override-script", content, true); err != nil {
 		return fmt.Errorf("script syntax error: %w", err)

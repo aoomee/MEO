@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -379,7 +380,7 @@ func (h *ManageHandler) authenticate(r *http.Request) bool {
 	}
 
 	if h.configToken == "" {
-		return true
+		return false
 	}
 
 	auth := r.Header.Get(constants.HeaderAuthorization)
@@ -392,10 +393,10 @@ func (h *ManageHandler) authenticate(r *http.Request) bool {
 
 	if strings.HasPrefix(auth, constants.BearerPrefix) {
 		token := strings.TrimPrefix(auth, constants.BearerPrefix)
-		return token == h.configToken
+		return subtle.ConstantTimeCompare([]byte(token), []byte(h.configToken)) == 1
 	}
 
-	return auth == h.configToken
+	return subtle.ConstantTimeCompare([]byte(auth), []byte(h.configToken)) == 1
 }
 
 // 输出 JSON 响应。
@@ -664,7 +665,7 @@ func (h *ManageHandler) HandleXrayInstall(w http.ResponseWriter, r *http.Request
 
 	log.Printf("[Manage] Installing Xray...")
 
-	cmd := exec.Command("bash", "-c", "bash -c \"$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ install")
+	cmd := exec.Command("bash", "-c", "tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash \"$tmp\" @ install")
 	cmd.Env = os.Environ()
 
 	var stdout, stderr bytes.Buffer
@@ -704,7 +705,7 @@ func (h *ManageHandler) HandleXrayRemove(w http.ResponseWriter, r *http.Request)
 
 	log.Printf("[Manage] Removing Xray...")
 
-	cmd := exec.Command("bash", "-c", "bash -c \"$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)\" @ remove")
+	cmd := exec.Command("bash", "-c", "tmp=$(mktemp) && trap 'rm -f \"$tmp\"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o \"$tmp\" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash \"$tmp\" @ remove")
 	cmd.Env = os.Environ()
 
 	var stdout, stderr bytes.Buffer
@@ -5639,7 +5640,7 @@ func (h *ManageHandler) HandleXrayInstallStream(w http.ResponseWriter, r *http.R
 	}
 	log.Printf("[Manage] Starting Xray install (stream)...")
 	cmd := exec.CommandContext(r.Context(), "bash", "-c",
-		`bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install`)
+		`tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o "$tmp" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash "$tmp" @ install`)
 	cmd.Env = os.Environ()
 	sseStreamCmd(w, r, cmd, "Xray installed successfully")
 
@@ -5658,7 +5659,7 @@ func (h *ManageHandler) HandleXrayRemoveStream(w http.ResponseWriter, r *http.Re
 	}
 	log.Printf("[Manage] Starting Xray remove (stream)...")
 	cmd := exec.CommandContext(r.Context(), "bash", "-c",
-		`bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ remove`)
+		`tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o "$tmp" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash "$tmp" @ remove`)
 	cmd.Env = os.Environ()
 	sseStreamCmd(w, r, cmd, "Xray removed successfully")
 }
@@ -5841,6 +5842,19 @@ for ASSET_NAME in "mmwx-agent-linux-${ARCH_NAME}" "mmw-agent-linux-${ARCH_NAME}"
     echo "没有 ${ASSET_NAME}，试下一个文件名"
 done
 [ "$DOWNLOADED" = "1" ] || { echo "ERROR: 下载失败。Release 资产名应为 mmwx-agent-linux-${ARCH_NAME} 或 mmw-agent-linux-${ARCH_NAME}" >&2; exit 1; }
+SUMS_FILE="$STAGING_DIR/SHA256SUMS-${ARCH_NAME}"
+SUMS_URL="$(gh_url "https://github.com/${REPO}/releases/download/${TAG}/SHA256SUMS-${ARCH_NAME}")"
+if ! dl "$SUMS_URL" "$SUMS_FILE"; then
+    echo "ERROR: 无法下载 SHA-256 校验文件，拒绝升级" >&2
+    exit 1
+fi
+EXPECTED_SHA="$(awk -v name="$ASSET_NAME" '$2 == name || $2 == "*" name {print $1; exit}' "$SUMS_FILE")"
+ACTUAL_SHA="$(sha256sum "$AGENT_NEW" | awk '{print $1}')"
+if [ -z "$EXPECTED_SHA" ] || [ "$ACTUAL_SHA" != "$EXPECTED_SHA" ]; then
+    echo "ERROR: Agent SHA-256 校验失败，拒绝升级" >&2
+    exit 1
+fi
+echo "Agent SHA-256 verified."
 chmod +x "$AGENT_NEW"
 echo "下载完成，大小: $(du -h "$AGENT_NEW" | cut -f1)"
 
@@ -6525,7 +6539,7 @@ func (h *ManageHandler) ensureExternalXray() error {
 	if _, err := exec.LookPath("xray"); err != nil {
 		log.Printf("[Manage] External xray not found, installing...")
 		cmd := exec.Command("bash", "-c",
-			`bash -c "$(curl -L https://github.com/XTLS/Xray-install/raw/main/install-release.sh)" @ install`)
+			`tmp=$(mktemp) && trap 'rm -f "$tmp"' EXIT && curl -fsSL --connect-timeout 10 --max-time 120 -o "$tmp" https://raw.githubusercontent.com/XTLS/Xray-install/e741a4f56d368afbb9e5be3361b40c4552d3710d/install-release.sh && bash "$tmp" @ install`)
 		cmd.Env = os.Environ()
 		output, err := cmd.CombinedOutput()
 		if err != nil {

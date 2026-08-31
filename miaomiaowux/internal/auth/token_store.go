@@ -271,8 +271,10 @@ func RequireToken(store *TokenStore, repo UserRepository, next http.Handler) htt
 				token = strings.TrimSpace(strings.TrimPrefix(bearer, "Bearer "))
 			}
 		}
-		// 回退到查询参数（对于不支持自定义标头的 SSE）
-		if token == "" {
+		// Browsers cannot set custom headers on WebSocket/EventSource requests.
+		// Limit query-string credentials to the two endpoints that require them;
+		// accepting ?token= globally leaks credentials through URLs and logs.
+		if token == "" && queryTokenAllowed(r) {
 			token = strings.TrimSpace(r.URL.Query().Get("token"))
 		}
 
@@ -303,6 +305,18 @@ func RequireToken(store *TokenStore, repo UserRepository, next http.Handler) htt
 
 		WriteUnauthorizedResponse(w)
 	})
+}
+
+func queryTokenAllowed(r *http.Request) bool {
+	if r == nil || r.Method != http.MethodGet {
+		return false
+	}
+	switch r.URL.Path {
+	case "/api/ws/dashboard", "/api/admin/update/apply-sse":
+		return true
+	default:
+		return false
+	}
 }
 
 // UserRepository 提供用户信息以进行授权检查。

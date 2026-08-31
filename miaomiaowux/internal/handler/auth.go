@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -37,34 +36,14 @@ type credentialsRequest struct {
 	Password string `json:"password"`
 }
 
-// GetClientIP extracts the client IP address from the request.
-// 优先级:CF-Connecting-IP > X-Forwarded-For[0] > X-Real-IP > RemoteAddr。
-// Cloudflare 头单独优先 — 套 CF 的反代往往同时设置 XFF,但 CF 头是 Cloudflare 注入的、最可信。
+// GetClientIP extracts the client IP address without trusting spoofable proxy
+// headers from arbitrary Internet clients. Proxy headers are considered only
+// when RemoteAddr belongs to MMWX_TRUSTED_PROXIES (loopback by default).
 func GetClientIP(r *http.Request) string {
-	// Cloudflare 专属头
-	if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); cf != "" {
-		return cf
+	if forwarded := forwardedClientIP(r); forwarded != "" {
+		return forwarded
 	}
-
-	// 首先检查 X-Forwarded-For 标头（对于代理请求）
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
-		}
-	}
-
-	// 检查 X-Real-IP 标头
-	if xri := r.Header.Get("X-Real-IP"); xri != "" {
-		return strings.TrimSpace(xri)
-	}
-
-	// 回退到 RemoteAddr
-	remote := strings.TrimSpace(r.RemoteAddr)
-	if host, _, err := net.SplitHostPort(remote); err == nil {
-		return strings.Trim(host, "[]")
-	}
-	return strings.Trim(remote, "[]")
+	return remoteHost(r.RemoteAddr)
 }
 
 func NewLoginHandler(manager *auth.Manager, tokens *auth.TokenStore, repo *storage.TrafficRepository, rateLimiter *LoginRateLimiter, twoFactorStore *auth.TwoFactorPendingStore, turnstile *captcha.Turnstile) http.Handler {
@@ -79,7 +58,8 @@ func NewLoginHandler(manager *auth.Manager, tokens *auth.TokenStore, repo *stora
 		}
 
 		var payload loginRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -186,7 +166,8 @@ func NewCredentialsHandler(manager *auth.Manager, tokens *auth.TokenStore) http.
 		}
 
 		var payload credentialsRequest
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		decoder := json.NewDecoder(http.MaxBytesReader(w, r.Body, 64<<10))
+		if err := decoder.Decode(&payload); err != nil {
 			writeError(w, http.StatusBadRequest, err)
 			return
 		}

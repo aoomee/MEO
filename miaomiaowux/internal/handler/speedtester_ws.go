@@ -83,7 +83,7 @@ type SpeedTesterWSHandler struct {
 func NewSpeedTesterWSHandler(repo *storage.TrafficRepository) *SpeedTesterWSHandler {
 	return &SpeedTesterWSHandler{
 		repo:     repo,
-		upgrader: websocket.Upgrader{CheckOrigin: func(*http.Request) bool { return true }},
+		upgrader: websocket.Upgrader{CheckOrigin: sameOriginOrNoOrigin},
 	}
 }
 

@@ -268,8 +268,8 @@ func (c *Config) discoverXrayServers() []XrayServer {
 
 // 校验配置是否合法。
 func (c *Config) Validate() error {
-	if c.ConnectionMode != constants.ConnectionModePull && c.Token == "" {
-		// 兼容空 token，实际仅拉取模式可正常工作
+	if strings.TrimSpace(c.Token) == "" {
+		return fmt.Errorf("token is required: refusing to start an unauthenticated management service")
 	}
 	return nil
 }

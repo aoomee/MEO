@@ -18,10 +18,17 @@ services:
       MMWX_UPDATE_REPO: ${MMWX_UPDATE_REPO:-off}
       MMWX_AGENT_GITHUB_REPO: ${MMWX_AGENT_GITHUB_REPO:-off}
       MMWX_GH_TOKEN: ${MMWX_GH_TOKEN:-}
+      # 首次远程初始化保护；留空会在启动日志中生成一次性随机值
+      MMWX_SETUP_TOKEN: ${MMWX_SETUP_TOKEN:-}
+      # 仅填写实际反向代理的 IP/CIDR，默认只信任回环地址
+      MMWX_TRUSTED_PROXIES: ${MMWX_TRUSTED_PROXIES:-}
     volumes:
       - mmwx-data:/app/data
     security_opt:
       - no-new-privileges:true
+    cap_drop:
+      - ALL
+    pids_limit: 256
 
 volumes:
   mmwx-data:

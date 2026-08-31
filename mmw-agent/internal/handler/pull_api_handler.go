@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -95,7 +96,7 @@ func (h *APIHandler) authenticate(r *http.Request) bool {
 	}
 
 	if h.configToken == "" {
-		return true
+		return false
 	}
 
 	auth := r.Header.Get(constants.HeaderAuthorization)
@@ -105,8 +106,8 @@ func (h *APIHandler) authenticate(r *http.Request) bool {
 
 	if strings.HasPrefix(auth, constants.BearerPrefix) {
 		token := strings.TrimPrefix(auth, constants.BearerPrefix)
-		return token == h.configToken
+		return subtle.ConstantTimeCompare([]byte(token), []byte(h.configToken)) == 1
 	}
 
-	return auth == h.configToken
+	return subtle.ConstantTimeCompare([]byte(auth), []byte(h.configToken)) == 1
 }

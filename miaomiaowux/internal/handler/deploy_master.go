@@ -77,7 +77,7 @@ func (h *CertificateHandler) GetMasterCertStatus(w http.ResponseWriter, r *http.
 	// 避免证书页一直误报「开启 HTTPS」。
 	externalHTTPS, _ := h.repo.GetSystemSetting(ctx, "external_https")
 	httpsEnabled := strings.HasPrefix(masterURL, "https://") ||
-		strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") ||
+		requestIsHTTPS(r) ||
 		externalHTTPS == "1"
 
 	// is_docker / panel_port:前端据此决定是否显示「宿主机 agent 反代主控」入口

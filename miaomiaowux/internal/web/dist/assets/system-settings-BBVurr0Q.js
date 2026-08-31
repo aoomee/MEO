@@ -2901,7 +2901,7 @@ function yi() {
           _0x16692c["external_access_token"]),
         _0x45b042["mutate"](_0x2ae073));
     },
-    [_0x3fd9b7, _0x35426f] = _0x46e13c["useState"]("pixel"),
+    [_0x3fd9b7, _0x35426f] = _0x46e13c["useState"]("flat"),
     { data: _0x5048a0 } = _0x37d641({
       queryKey: ["default-theme-settings"],
       queryFn: async () =>
@@ -6857,13 +6857,13 @@ function yi() {
                                           _0x2ddfe2["jsx"]("div", {
                                             className:
                                               "text-sm\x20font-semibold",
-                                            children: "Premium\x20探针数据洞察",
+                                            children: "探针数据模块",
                                           }),
                                           _0x2ddfe2["jsx"]("p", {
                                             className:
                                               "text-muted-foreground\x20mt-1\x20text-xs",
                                             children:
-                                              "分别控制\x20Premium\x20首页的数据模块；关闭后公开接口仍只返回其他已启用模块需要的数据。",
+                                              "分别控制首页的数据模块；关闭后公开接口仍只返回其他已启用模块需要的数据。",
                                           }),
                                         ],
                                       }),

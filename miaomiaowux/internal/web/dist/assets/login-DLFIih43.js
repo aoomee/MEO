@@ -86,9 +86,7 @@ function he() {
       staleTime: 0x1 / 0x0,
     }),
     _0x3355b6 = (_0x3684ae?.["login_wallpaper"] || "")["trim"](),
-    _0x2390fd =
-      typeof document < "u" &&
-      document["documentElement"]["classList"]["contains"]("theme-anime");
+    _0x2390fd = false;
   return { custom: _0x3355b6, isAnime: _0x2390fd };
 }
 function Fe() {
