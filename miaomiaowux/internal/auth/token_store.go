@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -171,7 +172,6 @@ func (s *TokenStore) UpdateUsername(oldUsername, newUsername string) {
 	if oldUsername == "" || newUsername == "" || oldUsername == newUsername {
 		return
 	}
-
 	s.mu.Lock()
 	for token, sess := range s.tokens {
 		if sess.username == oldUsername {
@@ -293,7 +293,8 @@ func RequireToken(store *TokenStore, repo UserRepository, next http.Handler) htt
 
 			// 3) 全局 API token(兼容旧用法,授予管理员)
 			apiToken, err := repo.GetAPIToken(r.Context())
-			if err == nil && token == apiToken && apiToken != "" {
+			// 恒定时间比较，避免计时侧信道
+			if err == nil && apiToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(apiToken)) == 1 {
 				ctx := ContextWithUsername(r.Context(), "api-token-admin")
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
