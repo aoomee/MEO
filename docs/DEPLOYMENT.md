@@ -12,13 +12,7 @@ Agent 建议安装在受管服务器宿主机上，不建议放入容器，因�
 
 ## Docker Compose（SQLite）
 
-先使用具备 `read:packages` 权限的 GitHub Token 登录私有 GHCR：
-
-```bash
-docker login ghcr.io -u aoomee
-```
-
-复制根目录 README 中的完整 Compose YAML，保存为 `docker-compose.yml` 后启动：
+公开镜像无需登录 GHCR。复制根目录 README 中的完整 Compose YAML，保存为 `docker-compose.yml` 后启动：
 
 ```bash
 docker compose up -d

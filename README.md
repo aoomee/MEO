@@ -14,13 +14,7 @@ MEO 是一套自托管的服务器、Xray 节点、套餐、用户、订阅与�
 
 ## Docker Compose
 
-镜像保存在私有 GHCR。服务器首次部署前，使用具备 `read:packages` 权限的 GitHub Token 登录一次：
-
-```bash
-docker login ghcr.io -u aoomee
-```
-
-复制下面完整内容并保存为 `docker-compose.yml`，也可以直接粘贴到 1Panel 的 Compose 编辑器：
+镜像公开托管在 GHCR，无需登录。复制下面完整内容并保存为 `docker-compose.yml`，也可以直接粘贴到 1Panel 的 Compose 编辑器：
 
 ```yaml
 name: meo
