@@ -1,0 +1,428 @@
+/* ============================================================
+   MEO · macOS 27 Golden Gate 风格覆盖层 (meo-refine.css)
+   方向：Liquid Glass 顶栏 + 系统蓝 + SF 字体栈 + 统一圆角
+   纯视觉覆盖，不修改任何 JS，不影响功能。
+   ============================================================ */
+
+/* ---------- 配色：macOS 系统色 ---------- */
+
+:root {
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #007aff;
+  --primary-foreground: #ffffff;
+  --secondary: #ececee;
+  --secondary-foreground: #1d1d1f;
+  --muted: #ececee;
+  --muted-foreground: #6e6e73;
+  --accent: #e9f1fd;
+  --accent-foreground: #007aff;
+  --border: #e2e2e6;
+  --input: #d2d2d7;
+  --ring: #007aff;
+  --destructive: #ff3b30;
+  --destructive-foreground: #ffffff;
+  --radius: 0.625rem;
+  color-scheme: light;
+}
+
+/* theme-minimal 使用 HSL 三元组变量，同步覆盖 */
+:root.theme-minimal,
+.theme-minimal {
+  --background: 240 11% 96%;
+  --foreground: 240 3% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 3% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 3% 12%;
+  --primary: 211 100% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 6% 93%;
+  --secondary-foreground: 240 3% 12%;
+  --muted: 240 6% 93%;
+  --muted-foreground: 240 2% 44%;
+  --accent: 216 83% 95%;
+  --accent-foreground: 211 100% 50%;
+  --border: 240 5% 89%;
+  --input: 240 4% 83%;
+  --ring: 211 100% 50%;
+  --destructive: 3 100% 59%;
+  --destructive-foreground: 0 0% 100%;
+  --radius: 0.625rem;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #1c1c1e;
+  --foreground: #f5f5f7;
+  --card: #2c2c2e;
+  --card-foreground: #f5f5f7;
+  --popover: #2c2c2e;
+  --popover-foreground: #f5f5f7;
+  --primary: #0a84ff;
+  --primary-foreground: #ffffff;
+  --secondary: #3a3a3c;
+  --secondary-foreground: #f5f5f7;
+  --muted: #3a3a3c;
+  --muted-foreground: #98989d;
+  --accent: #0a84ff26;
+  --accent-foreground: #0a84ff;
+  --border: #3d3d40;
+  --input: #48484a;
+  --ring: #0a84ff;
+  --destructive: #ff453a;
+  --destructive-foreground: #ffffff;
+  color-scheme: dark;
+}
+
+:root.dark.theme-minimal,
+.dark.theme-minimal {
+  --background: 240 3% 11%;
+  --foreground: 240 11% 96%;
+  --card: 240 2% 18%;
+  --card-foreground: 240 11% 96%;
+  --popover: 240 2% 18%;
+  --popover-foreground: 240 11% 96%;
+  --primary: 210 100% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 2% 23%;
+  --secondary-foreground: 240 11% 96%;
+  --muted: 240 2% 23%;
+  --muted-foreground: 240 2% 61%;
+  --accent: 210 100% 52%;
+  --accent-foreground: 210 100% 52%;
+  --border: 240 2% 25%;
+  --input: 240 1% 29%;
+  --ring: 210 100% 52%;
+  --destructive: 3 100% 61%;
+  --destructive-foreground: 0 0% 100%;
+  color-scheme: dark;
+}
+
+/* ---------- 圆角：macOS 27 统一圆角阶梯 ---------- */
+.rounded-xs { border-radius: 4px; }
+.rounded-sm { border-radius: 6px; }
+.rounded    { border-radius: 6px; }
+.rounded-md { border-radius: 8px; }
+.rounded-lg { border-radius: 10px; }
+.rounded-xl { border-radius: 14px; }
+.rounded-t-lg { border-top-left-radius: 10px; border-top-right-radius: 10px; }
+.rounded-b-lg { border-bottom-left-radius: 10px; border-bottom-right-radius: 10px; }
+.rounded-l-md { border-top-left-radius: 8px; border-bottom-left-radius: 8px; }
+.rounded-r-md { border-top-right-radius: 8px; border-bottom-right-radius: 8px; }
+
+/* ---------- 全局：寒蝉全圆体 + macOS 字号质感 ---------- */
+
+/* 寒蝉全圆体 ChillRoundF（SIL OFL 1.1），随仓库分发于 /fonts/ */
+@font-face {
+  font-family: "ChillRoundF";
+  src: url("/fonts/ChillRoundF.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+body,
+.theme-minimal body,
+.theme-flat body {
+  font-family: "ChillRoundF", -apple-system, BlinkMacSystemFont,
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* 圆体只有 Regular 字重，标题用字距分层，不合成伪粗体 */
+h1, h2, h3, .text-xl, .text-2xl, .text-3xl {
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+.font-mono, code, pre {
+  font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 阴影降级为 macOS 的细腻投影 */
+.shadow-lg, .shadow-md, .shadow-sm, .shadow, .shadow-xs {
+  --tw-shadow: 0 0.5px 2px #00000008, 0 12px 32px -12px #00000014;
+  box-shadow: 0 0.5px 2px #00000008, 0 12px 32px -12px #00000014;
+}
+.dark .shadow-lg, .dark .shadow-md, .dark .shadow-sm, .dark .shadow, .dark .shadow-xs {
+  --tw-shadow: 0 0.5px 2px #00000033, 0 12px 32px -12px #00000066;
+  box-shadow: 0 0.5px 2px #00000033, 0 12px 32px -12px #00000066;
+}
+
+/* ---------- 卡片：白底 + 发丝描边 + 柔和投影 ---------- */
+.bg-card:is(div, section, article),
+[class*="bg-card"]:is(div, section, article) {
+  border-color: #0000000a !important;
+  box-shadow: 0 0.5px 2px #00000005, 0 16px 40px -16px #00000012;
+}
+.dark .bg-card:is(div, section, article),
+.dark [class*="bg-card"]:is(div, section, article) {
+  border-color: #ffffff0f !important;
+  box-shadow: 0 0.5px 2px #00000040, 0 16px 40px -16px #00000080;
+}
+
+/* ---------- 顶栏：Liquid Glass 统一工具栏 ---------- */
+.theme-minimal .app-topbar,
+header.app-topbar,
+header {
+  background: #f5f5f7b8 !important;
+  -webkit-backdrop-filter: blur(30px) saturate(180%) !important;
+  backdrop-filter: blur(30px) saturate(180%) !important;
+  border-color: #0000000f !important;
+}
+.dark .theme-minimal .app-topbar,
+.dark header.app-topbar,
+.dark header {
+  background: #1c1c1eb8 !important;
+  border-color: #ffffff14 !important;
+}
+
+/* 顶栏内按钮：macOS 工具栏样式——无边框透明，悬停浅灰 */
+.app-topbar .pixel-button {
+  border-color: transparent !important;
+  background-color: transparent;
+  box-shadow: none;
+}
+.app-topbar .pixel-button:hover { background-color: #0000000a; }
+.dark .app-topbar .pixel-button:hover { background-color: #ffffff14; }
+/* 顶栏激活项保持系统蓝实心 */
+.app-topbar .pixel-button[data-status="active"],
+.theme-minimal .app-topbar .pixel-button.bg-primary,
+.theme-minimal .app-topbar button.bg-primary {
+  background-color: #007aff !important;
+  color: #ffffff !important;
+  box-shadow: 0 1px 3px #007aff40;
+}
+.dark .app-topbar .pixel-button[data-status="active"],
+.dark.theme-minimal .app-topbar .pixel-button.bg-primary {
+  background-color: #0a84ff !important;
+}
+
+/* ---------- 默认描边色：macOS 发丝分隔线 ---------- */
+*, ::before, ::after { border-color: #00000012; }
+.dark *, .dark ::before, .dark ::after { border-color: #ffffff14; }
+
+/* ---------- 按钮：macOS 控件质感 ---------- */
+.pixel-button {
+  border-radius: 8px;
+  border: 0.5px solid #00000014 !important;
+  background-color: #ffffffe6;
+  color: #1d1d1f;
+  box-shadow: 0 0.5px 1.5px #0000000a;
+  transition: background-color .15s ease, color .15s ease,
+    box-shadow .15s ease, transform .1s ease;
+}
+.dark .pixel-button {
+  background-color: #ffffff14;
+  border-color: #ffffff1f !important;
+  color: #f5f5f7;
+  box-shadow: 0 0.5px 1.5px #00000040;
+}
+.pixel-button:hover {
+  background-color: #f0f0f2;
+  color: #1d1d1f;
+  box-shadow: 0 0.5px 2px #00000012;
+}
+.dark .pixel-button:hover { background-color: #ffffff22; color: #ffffff; }
+.pixel-button:active { transform: scale(0.97); }
+
+/* 主按钮 / 激活态：系统蓝实心 */
+.theme-minimal .pixel-button.bg-primary,
+.theme-minimal button.bg-primary,
+.theme-minimal a.bg-primary,
+.pixel-button[data-status="active"] {
+  background-color: #007aff !important;
+  color: #ffffff !important;
+  border-color: transparent !important;
+  box-shadow: 0 1px 3px #007aff40;
+}
+.theme-minimal .pixel-button.bg-primary:hover,
+.theme-minimal button.bg-primary:hover {
+  background-color: #0071e3 !important;
+}
+.dark .pixel-button[data-status="active"],
+.dark.theme-minimal .pixel-button.bg-primary,
+.dark.theme-minimal button.bg-primary {
+  background-color: #0a84ff !important;
+  color: #ffffff !important;
+}
+.dark.theme-minimal .pixel-button.bg-primary:hover,
+.dark.theme-minimal button.bg-primary:hover {
+  background-color: #3399ff !important;
+}
+
+/* 表单主提交按钮：系统蓝 */
+form button[type="submit"].pixel-button {
+  background-color: #007aff;
+  color: #ffffff;
+  border-radius: 8px;
+  border-color: transparent !important;
+  box-shadow: 0 1px 3px #007aff40;
+}
+form button[type="submit"].pixel-button:hover {
+  background-color: #0071e3;
+}
+.dark form button[type="submit"].pixel-button { background-color: #0a84ff; }
+.dark form button[type="submit"].pixel-button:hover { background-color: #3399ff; }
+
+/* ---------- 输入框：macOS 文本框 ---------- */
+input:not([type="checkbox"]):not([type="radio"]),
+textarea,
+select {
+  border: 0.5px solid #00000024 !important;
+  border-radius: 6px !important;
+  background-color: #ffffff !important;
+  box-shadow: inset 0 1px 2px #0000000a !important;
+  padding-left: 8px;
+  padding-right: 8px;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.dark input:not([type="checkbox"]):not([type="radio"]),
+.dark textarea,
+.dark select {
+  background-color: #ffffff0f !important;
+  border-color: #ffffff2b !important;
+  box-shadow: inset 0 1px 2px #00000040 !important;
+}
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  border-color: #007aff !important;
+  box-shadow: 0 0 0 3.5px #007aff2e !important;
+  outline: none;
+}
+.dark input:focus-visible,
+.dark textarea:focus-visible,
+.dark select:focus-visible {
+  border-color: #0a84ff !important;
+  box-shadow: 0 0 0 3.5px #0a84ff40 !important;
+}
+
+/* ---------- 兜底圆角：无 rounded 类的按钮（如语言切换分段） ---------- */
+button:not([class*="rounded"]):not(.pixel-button) {
+  border-radius: 6px;
+}
+
+/* ---------- 原生复选框：macOS 圆角对勾 ---------- */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border: 0.5px solid #00000040;
+  border-radius: 5px;
+  background-color: #ffffff;
+  vertical-align: -2px;
+  cursor: pointer;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.dark input[type="checkbox"] {
+  background-color: #ffffff14;
+  border-color: #ffffff45;
+}
+input[type="checkbox"]:checked {
+  background-color: #007aff;
+  border-color: #007aff;
+}
+.dark input[type="checkbox"]:checked {
+  background-color: #0a84ff;
+  border-color: #0a84ff;
+}
+input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 4.5px;
+  top: 1px;
+  width: 4.5px;
+  height: 8.5px;
+  border: solid #ffffff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+input[type="checkbox"]:focus-visible {
+  box-shadow: 0 0 0 3.5px #007aff2e;
+  outline: none;
+}
+
+/* ---------- 表格：发丝分隔线 ---------- */
+table { border-collapse: separate; border-spacing: 0; }
+thead th {
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: #6e6e73;
+}
+.dark thead th { color: #98989d; }
+
+/* ---------- 弹层：Liquid Glass 菜单 ---------- */
+.bg-popover,
+[class*="bg-popover"] {
+  background-color: #ffffffcc !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-color: #0000000f !important;
+  box-shadow: 0 4px 12px #0000000a, 0 24px 64px -16px #0000002e;
+  border-radius: 12px;
+}
+.dark .bg-popover,
+.dark [class*="bg-popover"] {
+  background-color: #2c2c2ed9 !important;
+  border-color: #ffffff1a !important;
+  box-shadow: 0 4px 12px #00000059, 0 24px 64px -16px #000000a6;
+}
+
+/* ---------- 登录卡片：玻璃面板 ---------- */
+.max-w-sm:has(form) {
+  background-color: #ffffffb3 !important;
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 0.5px solid #ffffff80 !important;
+  border-radius: 20px !important;
+  box-shadow: 0 1px 3px #0000000a, 0 32px 80px -24px #0000002e !important;
+}
+.dark .max-w-sm:has(form) {
+  background-color: #2c2c2eb3 !important;
+  border-color: #ffffff1f !important;
+  box-shadow: 0 1px 3px #00000059, 0 32px 80px -24px #000000a6 !important;
+}
+
+/* ---------- 滚动条：macOS 覆盖式 ---------- */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #0000002b;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover { background: #00000045; }
+.dark ::-webkit-scrollbar-thumb { background: #ffffff38; }
+.dark ::-webkit-scrollbar-thumb:hover { background: #ffffff54; }
+
+/* ---------- 选中：系统蓝 ---------- */
+::selection { background: #007aff40; color: inherit; }
+.dark ::selection { background: #0a84ff59; color: inherit; }
+
+/* ============================================================
+   原构建缺陷修复：以下 Tailwind 工具类在 JS 中被使用，
+   但未编译进 CSS 产物，补回定义（与 Tailwind 默认值一致）。
+   关键是 .pt-20：页面主体靠它让开固定顶栏，缺失会导致
+   页面顶部内容（如「创建转发链」按钮）被顶栏盖住。
+   ============================================================ */
+.pt-20 { padding-top: 5rem; }
+.pt-8  { padding-top: 2rem; }
+.mx-4  { margin-left: 1rem; margin-right: 1rem; }
+.mx-6  { margin-left: 1.5rem; margin-right: 1.5rem; }
+.pl-0  { padding-left: 0; }
+.pl-16 { padding-left: 4rem; }
+.pl-52 { padding-left: 13rem; }
+.pr-\[7vw\] { padding-right: 7vw; }
+.space-y-8 > :not([hidden]) ~ :not([hidden]) { margin-top: 2rem; }
