@@ -12,9 +12,9 @@ MEO 是一套自托管的服务器、Xray 节点、套餐、用户、订阅与�
 | Compose + PostgreSQL | 长期运行、多用户 | PostgreSQL 17 | 数据库独立持久化 |
 | systemd 一键安装 | 需要直接管理宿主机 Nginx/Xray | SQLite 或外部 PostgreSQL | 支持 amd64/arm64 |
 
-## Docker Compose
+## Docker Compose（直接复制）
 
-镜像公开托管在 GHCR，无需登录。复制下面完整内容并保存为 `docker-compose.yml`，也可以直接粘贴到 1Panel 的 Compose 编辑器：
+镜像托管在 GHCR。复制下面完整内容保存为 `docker-compose.yml`，也可以直接粘贴到 1Panel 的 Compose 编辑器：
 
 ```yaml
 name: meo
@@ -26,7 +26,8 @@ services:
     pull_policy: always
     restart: unless-stopped
     ports:
-      - "12889:12889"
+      # 只让本机反向代理访问面板，公网只开放 80/443
+      - "127.0.0.1:12889:12889"
     environment:
       PORT: "12889"
       BIND_HOST: "0.0.0.0"
@@ -37,6 +38,7 @@ services:
       MMWX_UPDATE_REPO: "off"
       MMWX_AGENT_GITHUB_REPO: "off"
       MMWX_SETUP_TOKEN: ""
+      # 填写实际反向代理的 IP/CIDR；不要填 0.0.0.0/0
       MMWX_TRUSTED_PROXIES: ""
     volumes:
       - mmwx-data:/app/data
@@ -60,14 +62,60 @@ docker compose ps
 docker compose logs -f panel
 ```
 
-默认监听 `12889` 端口，数据保存在 Docker volume `mmwx-data`。首次使用请通过以下任一安全地址进入初始化页：
+默认监听本机 `12889` 端口，数据保存在 Docker volume `mmwx-data`。首次使用请通过以下任一安全地址进入初始化页：
 
 - 本机：`http://127.0.0.1:12889/login`
 - 生产环境：`https://你的域名/login`
 
 不要直接通过公网 `http://IP:12889` 初始化。浏览器加密接口需要 HTTPS 或 localhost 安全上下文。
 
-首次初始化还受启动令牌保护：设置 `MMWX_SETUP_TOKEN`（至少 24 个字符）可固定令牌；留空时面板会生成随机令牌并写入启动日志。远程初始化时访问日志中给出的 `/api/setup/authorize?token=...` 一次即可获得短期 HttpOnly 授权 Cookie。若面板位于反向代理后，将 `MMWX_TRUSTED_PROXIES` 设置为代理的实际 IP 或 CIDR（逗号分隔）；默认只信任回环地址，不能把它设置为 `0.0.0.0/0`。
+首次初始化还受启动令牌保护：设置 `MMWX_SETUP_TOKEN`（至少 24 个字符）可固定令牌；留空时面板会生成随机令牌并写入启动日志。远程初始化时访问日志中给出的 `/api/setup/authorize?token=...` 一次即可获得短期 HttpOnly 授权 Cookie。
+
+如果使用 Nginx、Caddy 或 Cloudflare Tunnel 反代，必须把代理的实际 IP/CIDR 写入 `MMWX_TRUSTED_PROXIES`。使用 `network_mode: host` 且代理也在宿主机时通常是：
+
+```dotenv
+MMWX_TRUSTED_PROXIES=127.0.0.1
+```
+
+桥接网络下请填写代理连接在面板容器中显示的源地址，通常是 Docker 网桥网关（例如 `172.17.0.1`）；代理在另一个 Docker 网络时可填写该网络的实际 CIDR（例如 `172.18.0.0/16`）。如果 Cloudflare 直接回源到面板，则填写 Cloudflare 官方 IP 段，并在防火墙中只允许这些网段访问源站。不要留空后直接把 `12889` 暴露到公网，也不要使用 `0.0.0.0/0`。
+
+反向代理需要传递原始协议：
+
+```nginx
+proxy_set_header Host $host;
+proxy_set_header X-Forwarded-Proto $scheme;
+proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+```
+
+修改环境变量后重新创建容器：
+
+```bash
+docker compose up -d --force-recreate panel
+```
+
+如果你沿用旧项目的 `network_mode: host`，请确保宿主机已有 Nginx/Caddy/Cloudflare Tunnel，并将面板绑定到本机：
+
+```yaml
+services:
+  panel:
+    image: ghcr.io/aoomee/meo:latest
+    container_name: meo
+    network_mode: host
+    restart: unless-stopped
+    environment:
+      PORT: "12889"
+      BIND_HOST: "127.0.0.1"
+      MMWX_DATA_DIR: "/app/data"
+      MMWX_DATABASE_DRIVER: "sqlite"
+      MMWX_DATABASE_PATH: "/app/data/mmwx.db"
+      MMWX_TRUSTED_PROXIES: "127.0.0.1"
+    volumes:
+      - ./data:/app/data
+      - ./subscribes:/app/subscribes
+      - ./rule_templates:/app/rule_templates
+```
+
+`network_mode: host` 下不要再写 `ports`；如果没有本机反向代理，请使用上面的默认 Compose 配置。PostgreSQL 建议使用仓库提供的 `deploy/compose.postgres.yml` 覆盖文件，避免 host 网络下的服务名解析问题。
 
 ## Docker Compose：PostgreSQL
 
